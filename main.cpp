@@ -79,7 +79,6 @@ int main() {
 	g_logger.set_tui_mode(true, [&g_tui](const std::string& line) { g_tui.push_log(line); });
 	g_tui.start();
 
-	std::thread sync_thread(run_sync_config_task, std::ref(key_manager), std::ref(shutdown));
 
 	httplib::Server svr;
 	g_tui.set_stop_callback([&svr]() { svr.stop(); });
@@ -744,7 +743,6 @@ int main() {
 	shutdown.store(true);
 	g_tui.stop();
 	g_logger.set_tui_mode(false);
-	if (sync_thread.joinable()) sync_thread.join();
 	curl_global_cleanup();
 	return 0;
 }

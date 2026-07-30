@@ -12,15 +12,6 @@
 
 bool file_exists(const std::string& path);
 std::string get_home_dir();
-std::string find_config_file();
-nlohmann::json parse_jsonc(const std::string& filepath);
-void update_opencode_config(const std::vector<std::string>& models_list);
-
-// ============================================================================
-// Config Sync
-// ============================================================================
-
-void run_sync_config_task(KeyManager& key_manager, std::atomic<bool>& shutdown);
 
 // ============================================================================
 // Token Estimation & Model Mapping

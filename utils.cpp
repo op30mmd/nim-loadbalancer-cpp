@@ -1,8 +1,6 @@
 #include "utils.h"
-#include "proxy_config.h"
 #include <fstream>
 #include <sstream>
-#include <regex>
 #include <unordered_map>
 #include <cstring>
 
@@ -30,175 +28,6 @@ std::string get_home_dir() {
 	const char* home = std::getenv("HOME");
 	return home ? std::string(home) : "";
 #endif
-}
-
-std::string find_config_file() {
-	std::vector<std::string> names = { "kilo.jsonc", "kilo.json", "opencode.jsonc", "opencode.json" };
-	for (const auto& name : names) {
-		if (file_exists(name)) return name;
-	}
-	std::string home = get_home_dir();
-	if (!home.empty()) {
-		std::vector<std::string> global_paths = {
-			home + "/.config/kilo/kilo.jsonc",
-			home + "/.config/kilo/kilo.json",
-			home + "/.config/opencode/opencode.jsonc",
-			home + "/.config/opencode/opencode.json",
-			home + "/AppData/Roaming/kilo/kilo.jsonc",
-			home + "/AppData/Roaming/kilo/kilo.json",
-			home + "/AppData/Roaming/opencode/opencode.jsonc",
-			home + "/AppData/Roaming/opencode/opencode.json"
-		};
-		for (const auto& path : global_paths) {
-			if (file_exists(path)) return path;
-		}
-	}
-	return "";
-}
-
-nlohmann::json parse_jsonc(const std::string& filepath) {
-	std::ifstream file(filepath);
-	if (!file.is_open()) {
-		throw std::runtime_error("Cannot open file: " + filepath);
-	}
-	std::stringstream buffer;
-	buffer << file.rdbuf();
-	std::string content = buffer.str();
-
-	content = std::regex_replace(content, std::regex(R"(/\*[\s\S]*?\*/)"), "");
-	content = std::regex_replace(content, std::regex(R"(//.*?\n)"), "\n");
-	content = std::regex_replace(content, std::regex(R"(,(\s*[\]}]))"), "$1");
-
-	return nlohmann::json::parse(content);
-}
-
-void update_opencode_config(const std::vector<std::string>& models_list) {
-	std::string config_path = find_config_file();
-	if (config_path.empty()) {
-		LOG_INFO("ConfigSync", "No kilo or opencode configuration file detected.");
-		return;
-	}
-
-	nlohmann::json config_data;
-	try {
-		config_data = parse_jsonc(config_path);
-	}
-	catch (const std::exception& e) {
-		LOG_WARN("ConfigSync", "Error reading config at " + config_path + ": " + e.what());
-		return;
-	}
-
-	if (!config_data.contains("provider")) {
-		config_data["provider"] = nlohmann::json::object();
-	}
-
-	std::string provider_id = "nvidia";
-	if (!config_data["provider"].contains(provider_id)) {
-		config_data["provider"][provider_id] = {
-			{"options", {{"baseURL", "http://127.0.0.1:8100/v1"}}}
-		};
-	}
-	else {
-		if (!config_data["provider"][provider_id].contains("options")) {
-			config_data["provider"][provider_id]["options"] = nlohmann::json::object();
-		}
-		config_data["provider"][provider_id]["options"]["baseURL"] = "http://127.0.0.1:8100/v1";
-	}
-
-	nlohmann::json models_dict = nlohmann::json::object();
-	for (const auto& model_id : models_list) {
-		size_t slash_pos = model_id.find_last_of('/');
-		std::string raw_name = (slash_pos == std::string::npos) ? model_id : model_id.substr(slash_pos + 1);
-		for (auto& c : raw_name) {
-			if (c == '-') c = ' ';
-		}
-		bool cap = true;
-		for (auto& c : raw_name) {
-			if (std::isspace(static_cast<unsigned char>(c))) {
-				cap = true;
-			}
-			else if (cap) {
-				c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
-				cap = false;
-			}
-			else {
-				c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-			}
-		}
-		models_dict[model_id] = { {"name", raw_name} };
-	}
-
-	config_data["provider"][provider_id]["models"] = models_dict;
-
-	try {
-		std::ofstream out(config_path);
-		out << config_data.dump(2);
-		LOG_INFO("ConfigSync", "Successfully synced " + std::to_string(models_list.size()) + " models to " + config_path);
-	}
-	catch (const std::exception& e) {
-		LOG_ERROR("ConfigSync", "Failed writing config to " + config_path + ": " + e.what());
-	}
-}
-
-// ============================================================================
-// Config Sync
-// ============================================================================
-
-void run_sync_config_task(KeyManager& key_manager, std::atomic<bool>& shutdown) {
-	std::this_thread::sleep_for(std::chrono::seconds(1));
-	if (shutdown.load()) return;
-
-	std::string key = key_manager.get_first_key();
-	if (key.empty()) return;
-
-	CURL* curl = curl_easy_init();
-	if (!curl) return;
-
-	std::string url = NVIDIA_BASE_URL + "/models";
-	struct curl_slist* headers_list = nullptr;
-	std::string auth_header = "Authorization: Bearer " + key;
-	headers_list = curl_slist_append(headers_list, auth_header.c_str());
-	headers_list = curl_slist_append(headers_list, "User-Agent: nim-proxy-cpp/1.0");
-	headers_list = curl_slist_append(headers_list, "X-Source: nim-proxy-cpp");
-
-	CurlBuffer write_buf;
-	curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers_list);
-	configure_curl_network_stability(curl);
-	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_buffer_callback);
-	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &write_buf);
-
-	CURLcode res = curl_easy_perform(curl);
-	long http_code = 0;
-	if (res == CURLE_OK) {
-		curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
-	}
-
-	curl_slist_free_all(headers_list);
-	curl_easy_cleanup(curl);
-
-	if (http_code == 200) {
-		try {
-			auto models_json = nlohmann::json::parse(write_buf.data);
-			std::vector<std::string> models_list;
-			if (models_json.contains("data") && models_json["data"].is_array()) {
-				for (const auto& item : models_json["data"]) {
-					if (item.contains("id") && item["id"].is_string()) {
-						models_list.push_back(item["id"].get<std::string>());
-					}
-				}
-			}
-			if (!models_list.empty()) {
-				update_opencode_config(models_list);
-			}
-		}
-		catch (const std::exception& e) {
-			LOG_ERROR("ConfigSync", "Failed parsing models JSON: " + std::string(e.what()));
-		}
-	}
-	else {
-		LOG_WARN("ConfigSync", "Catalog fetch failed with HTTP " + std::to_string(http_code));
-	}
 }
 
 // ============================================================================
@@ -413,8 +242,9 @@ int get_model_context_window(const std::string& model_id) {
 std::vector<std::string> load_api_keys() {
 	std::vector<std::string> keys;
 
+	// Try environment variable (comma-separated)
 	const char* env_keys = std::getenv("NVIDIA_API_KEY");
-	if (env_keys) {
+	if (env_keys && env_keys[0] != '\0') {
 		std::string s(env_keys);
 		std::stringstream ss(s);
 		std::string key;
@@ -424,16 +254,8 @@ std::vector<std::string> load_api_keys() {
 			if (!key.empty()) keys.push_back(key);
 		}
 	}
-	if (keys.empty()) {
-		const char* single_key = std::getenv("NVIDIA_API_KEY");
-		if (single_key) {
-			std::string s(single_key);
-			s.erase(0, s.find_first_not_of(" \t\r\n"));
-			s.erase(s.find_last_not_of(" \t\r\n") + 1);
-			if (!s.empty()) keys.push_back(s);
-		}
-	}
 
+	// Fall back to keys.txt
 	if (keys.empty() && file_exists("keys.txt")) {
 		LOG_INFO("Startup", "Reading API keys from local 'keys.txt'");
 		std::ifstream f("keys.txt");

@@ -11,7 +11,6 @@ A high-performance reverse proxy and load balancer for the [NVIDIA NIM](https://
 - **Model mapping**: Built-in mapping from Claude/GPT model names to NIM equivalents; overridable via `NIM_MODEL_MAP` environment variable
 - **Model-specific overrides**: Automatic `chat_template_kwargs` injection for GLM-5, DeepSeek, Nemotron, Qwen, and other NIM models
 - **Client-side rate limiting**: Configurable concurrency cap and minimum inter-request interval to stay within NIM free-tier quotas
-- **Config sync**: On startup, fetches the NIM model catalog and writes it to Kilo/OpenCode provider configs so the model list stays current
 - **TUI control panel**: Fullscreen terminal UI with live traffic statistics, latency percentiles, key health dashboard, throughput/latency charts, sparklines, and activity log
 - **CORS**: Permissive CORS headers for browser-based clients
 
@@ -170,7 +169,7 @@ Client (Anthropic/OpenAI protocol)
 | `proxy_config.h` | Network types: SafeQueue, ProxyContext, curl callbacks, streaming state |
 | `key_manager.h` | KeyManager, ClientSideBackoff, ModelCache |
 | `anthropic_handler.h/.cpp` | Anthropic ↔ OpenAI request/response translation, SSE stream processing |
-| `utils.h/.cpp` | Config file I/O, model mapping, token estimation, key loading, config sync |
+| `utils.h/.cpp` | Model mapping, token estimation, key loading |
 | `logger.h` | Thread-safe logger with file output and TUI callback |
 | `stats_collector.h` | Rolling-window statistics, latency percentiles, time series |
 | `tui_panel.h` | Fullscreen ANSI terminal UI with charts and keybindings |
