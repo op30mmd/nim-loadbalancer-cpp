@@ -274,6 +274,25 @@ inline std::string truncate_ansi(const std::string& s, size_t max_visible) {
     return s;
 }
 
+inline size_t visible_length(const std::string& s) {
+    size_t count = 0;
+    bool in_escape = false;
+    for (char c : s) {
+        if (c == '\033') {
+            in_escape = true;
+            continue;
+        }
+        if (in_escape) {
+            if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) {
+                in_escape = false;
+            }
+            continue;
+        }
+        count++;
+    }
+    return count;
+}
+
 inline std::string pad_right(const std::string& s, size_t width) {
     if (s.size() >= width) return s.substr(0, width);
     return s + std::string(width - s.size(), ' ');
@@ -399,6 +418,7 @@ private:
     static constexpr size_t MAX_LOG_LINES = 200;
 
     int selected_tab = 0;  // 0=overview, 1=keys, 2=logs
+    int current_max_w = 80;
 
     void add_log_line(const std::string& line) {
         std::string clean;
@@ -474,8 +494,11 @@ private:
 
     void emit(std::string& buf, int row, int col, const std::string& text) {
         buf += ansi::move(row, col);
-        buf += ansi::CLEAR_EOL;
         buf += text;
+        size_t vis_len = visible_length(text);
+        if (vis_len < (size_t)current_max_w) {
+            buf += std::string(current_max_w - vis_len, ' ');
+        }
     }
 
     void emit(int row, int col, const std::string& text) {
@@ -487,6 +510,7 @@ private:
         int H = term::get_height();
         int max_w = (std::max)(10, W - 1);
         int max_h = (std::max)(5, H - 1);
+        current_max_w = max_w;
         int row = 1;
 
         auto snap = stats.snapshot();
@@ -572,7 +596,7 @@ private:
 
         for (int r = row; r <= max_h; r++) {
             buf += ansi::move(r, 1);
-            buf += ansi::CLEAR_EOL;
+            buf += std::string(max_w, ' ');
         }
         buf += ansi::move(row, 1);
         buf += ansi::CLEAR_EOS;
