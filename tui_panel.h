@@ -491,7 +491,7 @@ private:
         int status_pad = max_w - visible_len;
         if (status_pad < 0) status_pad = 0;
 
-        std::string status_line = std::string(ansi::BG_GREEN) + std::string(ansi::BOLD) + std::string(ansi::BLACK)
+        std::string status_line = std::string(ansi::BG_GREEN) + std::string(ansi::BOLD) + std::string(ansi::BRIGHT_WHITE)
             + " RUNNING " + ansi::RESET
             + std::string(ansi::BG_GRAY) + std::string(ansi::BOLD)
             + std::string(ansi::BRIGHT_WHITE) + " Uptime: "
