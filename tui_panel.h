@@ -641,7 +641,7 @@ private:
         if (selected_tab == 2) {
             controls += "  [Up/Down] scroll";
         } else if (selected_tab == 3) {
-            controls += "  [Up/Down] select  [E]nable  [P]riority  [S]tatus  [R]eset";
+            controls += "  [↑/↓] select  [E/P/S/R] actions";
         }
         tabs += std::string(ansi::DIM) + controls + ansi::RESET;
         emit(buf, row++, 1, tabs);
@@ -940,8 +940,6 @@ private:
         }
 
         if (row < max_h) {
-            emit(buf, row++, 1, std::string(ansi::DIM) + "  Legend: " + ansi::RESET
-                + "[E] Toggle enabled   [P] Cycle priority   [S] Cycle status   [R] Reset to defaults");
             emit(buf, row++, 1, std::string(ansi::DIM) + "  Note: This TUI simulates provider config. Real multi-provider routing is not yet wired into backend." + ansi::RESET);
         }
 
