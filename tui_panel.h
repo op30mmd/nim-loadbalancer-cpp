@@ -488,7 +488,11 @@ private:
                 tabs += std::string(ansi::DIM) + " " + tab_names[i] + " " + ansi::RESET + " ";
             }
         }
-        tabs += std::string(ansi::DIM) + "  [Tab] switch  [q] quit" + ansi::RESET;
+        std::string controls = "  [Tab] switch  [q] quit";
+        if (selected_tab == 2) {
+            controls += "  [Up/Down] scroll";
+        }
+        tabs += std::string(ansi::DIM) + controls + ansi::RESET;
         emit(buf, row++, 1, tabs);
 
         // Separator
@@ -618,14 +622,11 @@ private:
                 err_w = 4;
             }
         }
-        if (row < max_h - 1) {
+        if (row < max_h) {
             emit(buf, row++, 1, std::string(ansi::DIM) + " Throughput: " + ansi::RESET
                 + sparkline(snap.throughput_series, tp_w, ansi::BRIGHT_CYAN)
                 + std::string(ansi::DIM) + "   Errors: " + ansi::RESET
                 + sparkline(snap.error_rate_series, err_w, ansi::BRIGHT_RED));
-        }
-        if (row < max_h) {
-            emit(buf, row++, 1, std::string(ansi::DIM) + " [1]Overview [2]Keys [3]Logs  [q]Quit  [Tab]Next" + ansi::RESET);
         }
 
         return row;
@@ -680,12 +681,6 @@ private:
             emit(buf, row++, 1, std::string(ansi::YELLOW) + "  No API keys configured." + ansi::RESET);
         }
 
-        // Footer
-        row++;
-        if (row < max_h) {
-            emit(buf, row++, 1, std::string(ansi::DIM) + " [1]Overview [2]Keys [3]Logs  [q]Quit" + ansi::RESET);
-        }
-
         return row;
     }
 
@@ -697,7 +692,7 @@ private:
         }
 
         auto logs = get_log_snapshot();
-        int visible = max_h - row - 2;
+        int visible = max_h - row;
         if (visible < 1) visible = 1;
 
         int start = (int)logs.size() - visible - scroll_offset;
@@ -706,18 +701,13 @@ private:
         if (end > (int)logs.size()) end = (int)logs.size();
 
         for (int i = start; i < end; i++) {
-            if (row >= max_h - 1) break;
+            if (row >= max_h) break;
             std::string line = logs[i];
             emit(buf, row++, 1, "  " + truncate(line, max_w - 4));
         }
 
-        if (logs.empty() && row < max_h - 1) {
+        if (logs.empty() && row < max_h) {
             emit(buf, row++, 1, std::string(ansi::DIM) + "  No log entries yet..." + ansi::RESET);
-        }
-
-        row++;
-        if (row < max_h) {
-            emit(buf, row++, 1, std::string(ansi::DIM) + " [1]Overview [2]Keys [3]Logs  [q]Quit  [Up/Down]Scroll" + ansi::RESET);
         }
 
         return row;
