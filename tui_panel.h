@@ -275,9 +275,9 @@ inline std::string bar(double value, double max_val, int width,
 // Draw a sparkline from a time series using clean ASCII characters
 inline std::string sparkline(const std::vector<TimeSeriesPoint>& series, int width,
                              const char* color = ansi::BRIGHT_CYAN) {
-    static const char chars[] = {' ', '.', '-', '=', '*', '#'};
+    static const char chars[] = {'_', '.', '-', '=', '*', '#'};
 
-    if (series.empty() || width <= 0) return std::string(width, ' ');
+    if (series.empty() || width <= 0) return std::string(width, '_');
 
     // Take last `width` points
     size_t start = series.size() > (size_t)width ? series.size() - width : 0;
@@ -299,7 +299,7 @@ inline std::string sparkline(const std::vector<TimeSeriesPoint>& series, int wid
     }
     result += ansi::RESET;
     if (vals.size() < (size_t)width) {
-        result += std::string(width - vals.size(), ' ');
+        result += std::string(width - vals.size(), '_');
     }
     return result;
 }
