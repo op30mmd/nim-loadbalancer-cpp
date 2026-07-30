@@ -108,7 +108,7 @@ public:
 	}
 };
 
-inline Logger g_logger;
+extern Logger g_logger;
 
 #define LOG_DEBUG(tag, msg) g_logger.log(LogLevel::LEVEL_DEBUG, tag, msg)
 #define LOG_INFO(tag, msg)  g_logger.log(LogLevel::LEVEL_INFO, tag, msg)

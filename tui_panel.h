@@ -248,6 +248,32 @@ inline std::string truncate(const std::string& s, size_t max_len) {
     return s.substr(0, max_len - 3) + "...";
 }
 
+inline std::string truncate_ansi(const std::string& s, size_t max_visible) {
+    size_t visible_count = 0;
+    bool in_escape = false;
+    size_t cut_idx = s.size();
+    for (size_t i = 0; i < s.size(); i++) {
+        if (s[i] == '\033') {
+            in_escape = true;
+            continue;
+        }
+        if (in_escape) {
+            if ((s[i] >= 'A' && s[i] <= 'Z') || (s[i] >= 'a' && s[i] <= 'z')) {
+                in_escape = false;
+            }
+            continue;
+        }
+        visible_count++;
+        if (visible_count == max_visible - 3 && cut_idx == s.size()) {
+            cut_idx = i + 1;
+        }
+        if (visible_count >= max_visible) {
+            return s.substr(0, cut_idx) + "..." + ansi::RESET;
+        }
+    }
+    return s;
+}
+
 inline std::string pad_right(const std::string& s, size_t width) {
     if (s.size() >= width) return s.substr(0, width);
     return s + std::string(width - s.size(), ' ');
@@ -375,8 +401,14 @@ private:
     int selected_tab = 0;  // 0=overview, 1=keys, 2=logs
 
     void add_log_line(const std::string& line) {
+        std::string clean;
+        clean.reserve(line.size());
+        for (char c : line) {
+            if (c == '\r' || c == '\n') continue;
+            clean += c;
+        }
         std::lock_guard<std::mutex> lock(log_mtx);
-        log_lines.push_back(line);
+        log_lines.push_back(clean);
         while (log_lines.size() > MAX_LOG_LINES) log_lines.pop_front();
     }
 
@@ -538,6 +570,10 @@ private:
             row = render_logs(buf, row, max_w, max_h);
         }
 
+        for (int r = row; r <= max_h; r++) {
+            buf += ansi::move(r, 1);
+            buf += ansi::CLEAR_EOL;
+        }
         buf += ansi::move(row, 1);
         buf += ansi::CLEAR_EOS;
 
@@ -732,7 +768,7 @@ private:
         for (int i = start; i < end; i++) {
             if (row >= max_h) break;
             std::string line = logs[i];
-            emit(buf, row++, 1, "  " + truncate(line, max_w - 4));
+            emit(buf, row++, 1, "  " + truncate_ansi(line, max_w - 4));
         }
 
         if (logs.empty() && row < max_h) {

@@ -43,6 +43,8 @@
 #include "stats_collector.h"
 #include "tui_panel.h"
 
+Logger g_logger;
+
 int main() {
 	g_logger.init(LogLevel::LEVEL_DEBUG, "proxy.log");
 	curl_global_init(CURL_GLOBAL_ALL);
