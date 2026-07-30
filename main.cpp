@@ -547,11 +547,11 @@ int main() {
 	}
 };
 
-	svr.Post("/v1/messages", handle_anthropic_messages);
-	svr.Post("/messages", handle_anthropic_messages);
+svr.Post("/v1/messages", handle_anthropic_messages);
+svr.Post("/messages", handle_anthropic_messages);
 
-	// --- GENERIC OPENAI WILDCARD ROUTE HANDLER ---
-	auto handle_openai_proxy = [&](const httplib::Request& req, httplib::Response& res) {
+// --- GENERIC OPENAI WILDCARD ROUTE HANDLER ---
+auto handle_openai_proxy = [&](const httplib::Request& req, httplib::Response& res) {
 		auto _req_start = std::chrono::steady_clock::now();
 		std::string _ep = req.path;
 		bool _skip_stats = false;
