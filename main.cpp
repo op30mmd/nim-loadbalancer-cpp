@@ -59,8 +59,8 @@ int main() {
 
 	httplib::Server svr;
 
-	svr.set_read_timeout(300, 0);
-	svr.set_write_timeout(600, 0);
+	svr.set_read_timeout(600, 0);
+	svr.set_write_timeout(900, 0);
 
 	// --- GLOBAL CORS MIDDLEWARE & OPTIONS PREFLIGHT HANDLER ---
 	svr.set_pre_routing_handler([](const httplib::Request& req, httplib::Response& res) {
