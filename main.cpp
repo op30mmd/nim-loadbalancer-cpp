@@ -1,5 +1,9 @@
 #define _CRT_SECURE_NO_WARNINGS
 
+// This project REQUIRES C++17 (structured bindings, auto [x,y], etc.)
+// In Visual Studio: Project Properties → C/C++ → Language → C++ Language Standard → ISO C++17 Standard (/std:c++17)
+// After changing .vcxproj or this file, always do: Clean Solution + Rebuild Solution
+
 #ifdef _MSC_VER
 #pragma warning(push)
 #pragma warning(disable: 26495)
