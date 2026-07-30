@@ -51,7 +51,7 @@ int main() {
 	LOG_INFO("Startup", "Loaded " + std::to_string(keys.size()) + " API key(s).");
 
 	KeyManager key_manager(keys);
-	ClientSideBackoff backoff_manager(2, 1.0);
+	ClientSideBackoff backoff_manager(2, 1.71); // ~35 RPM safe margin for NIM free tier
 	ModelCache model_cache(3600);
 
 	std::atomic<bool> shutdown(false);
