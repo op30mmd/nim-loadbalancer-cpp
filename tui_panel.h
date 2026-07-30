@@ -31,6 +31,7 @@
 
 #include "stats_collector.h"
 #include "key_manager.h"
+#include "provider_manager.h"
 
 // ============================================================================
 // Terminal Helpers
@@ -434,6 +435,8 @@ private:
     std::vector<ProviderConfig> providers;
     int selected_provider_idx = 0;
 
+    ProviderManager* provider_manager = nullptr;
+
     void add_log_line(const std::string& line) {
         std::string clean;
         clean.reserve(line.size());
@@ -447,8 +450,8 @@ private:
     }
 
 public:
-    TUIPanel(KeyManager& km, StatsCollector& st, std::atomic<bool>& sd)
-        : key_manager(km), stats(st), shutdown(sd) {
+    TUIPanel(KeyManager& km, StatsCollector& st, std::atomic<bool>& sd, ProviderManager* pm = nullptr)
+        : key_manager(km), stats(st), shutdown(sd), provider_manager(pm) {
         // Seed initial providers (NVIDIA is primary; others are placeholders/configurable in TUI)
         providers = {
             {"NVIDIA NIM", "nvidia", "https://integrate.api.nvidia.com/v1", "...masked", true, 0, "ready"},
@@ -456,6 +459,34 @@ public:
             {"Anthropic", "anthropic", "https://api.anthropic.com", "", false, 2, "disabled"},
             {"Groq", "groq", "https://api.groq.com/openai/v1", "", false, 3, "disabled"},
         };
+
+        // Sync initial state to backend if available
+        sync_to_provider_manager();
+    }
+
+    // Allow external code (e.g. main) to get current provider list for backend sync
+    std::vector<TUIBackendProvider> get_current_providers() const {
+        std::vector<TUIBackendProvider> out;
+        for (const auto& p : providers) {
+            TUIBackendProvider up;
+            up.name = p.name;
+            up.type = p.type;
+            up.base_url = p.base_url;
+            up.enabled = p.enabled;
+            up.priority = p.priority;
+            up.status = p.status;
+            up.api_key_masked = p.api_key_masked;
+            out.push_back(up);
+        }
+        return out;
+    }
+
+    void sync_to_provider_manager() {
+        if (!provider_manager) return;
+        auto ui_list = get_current_providers();
+        // We pass the original keys from key_manager via initialize path.
+        // For now the ProviderManager will use the fallback keys it was given.
+        provider_manager->set_providers(ui_list, {}, 60, 1800);  // keys will be managed separately for now
     }
 
     void push_log(const std::string& line) {
@@ -515,11 +546,13 @@ private:
                     if (!providers.empty() && selected_provider_idx < (int)providers.size()) {
                         providers[selected_provider_idx].enabled = !providers[selected_provider_idx].enabled;
                         providers[selected_provider_idx].status = providers[selected_provider_idx].enabled ? "ready" : "disabled";
+                        sync_to_provider_manager();
                     }
                 }
                 if (key == 'p' || key == 'P') {
                     if (!providers.empty() && selected_provider_idx < (int)providers.size()) {
                         providers[selected_provider_idx].priority = (providers[selected_provider_idx].priority + 1) % 5;
+                        sync_to_provider_manager();
                     }
                 }
                 if (key == 's' || key == 'S') {
@@ -528,6 +561,7 @@ private:
                         if (pr.status == "ready") pr.status = "cooldown";
                         else if (pr.status == "cooldown") pr.status = "error";
                         else pr.status = "ready";
+                        sync_to_provider_manager();
                     }
                 }
                 if (key == 'r' || key == 'R') {
@@ -538,6 +572,7 @@ private:
                         } else {
                             pr.enabled = false; pr.priority = selected_provider_idx; pr.status = "disabled";
                         }
+                        sync_to_provider_manager();
                     }
                 }
             } else {
