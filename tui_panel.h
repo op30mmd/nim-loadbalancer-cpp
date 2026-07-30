@@ -538,7 +538,7 @@ private:
             + std::string(status_pad, ' ')
             + ansi::RESET;
         emit(buf, row++, 1, status_line);
-        row++;
+        emit(buf, row++, 1, "");
 
         // Tab bar
         const char* tab_names[] = {"[1] Overview", "[2] Keys", "[3] Logs"};
@@ -559,7 +559,7 @@ private:
 
         // Separator
         emit(buf, row++, 1, std::string(ansi::DIM) + std::string(max_w, '-') + ansi::RESET);
-        row++;
+        emit(buf, row++, 1, "");
 
         // ─── Tab Content ────────────────────────────────────────────
         if (selected_tab == 0) {
@@ -587,7 +587,7 @@ private:
         // ─── Traffic Statistics ───
         if (row < max_h) {
             emit(buf, row++, 1, std::string(ansi::BOLD) + std::string(ansi::BRIGHT_GREEN) + ">> Traffic Statistics" + ansi::RESET);
-            row++;
+            emit(buf, row++, 1, "");
         }
 
         auto stat_line = [&](const std::string& label, const std::string& value, const char* color) {
@@ -610,12 +610,12 @@ private:
         stat_line("Requests/min:", format_number(snap.requests_per_minute), ansi::BRIGHT_CYAN);
         stat_line("Active Streams:", std::to_string(snap.active_streams), ansi::BRIGHT_BLUE);
 
-        row++;
+        emit(buf, row++, 1, "");
 
         // ─── Latency ───
         if (row < max_h) {
             emit(buf, row++, 1, std::string(ansi::BOLD) + std::string(ansi::BRIGHT_GREEN) + ">> Latency" + ansi::RESET);
-            row++;
+            emit(buf, row++, 1, "");
             stat_line("Average:", format_number(snap.avg_latency_ms) + " ms", ansi::BRIGHT_CYAN);
             stat_line("P95:", format_number(snap.p95_latency_ms) + " ms",
                       snap.p95_latency_ms < 2000 ? ansi::BRIGHT_GREEN : ansi::BRIGHT_YELLOW);
@@ -625,12 +625,12 @@ private:
                       + format_number(snap.max_latency_ms) + " ms", ansi::WHITE);
         }
 
-        row++;
+        emit(buf, row++, 1, "");
 
         // ─── Key Health ───
         if (row < max_h) {
             emit(buf, row++, 1, std::string(ansi::BOLD) + std::string(ansi::BRIGHT_GREEN) + ">> Key Health" + ansi::RESET);
-            row++;
+            emit(buf, row++, 1, "");
         }
 
         // Table header
@@ -661,7 +661,7 @@ private:
             emit(buf, row++, 1, line);
         }
 
-        row++;
+        emit(buf, row++, 1, "");
 
         // ─── Throughput Chart (dynamically sized to fill remaining screen down to bottom row max_h) ───
         int chart_w = (std::max)(20, max_w - 4);
@@ -703,7 +703,7 @@ private:
         if (row < max_h) {
             emit(buf, row++, 1, std::string(ansi::BOLD) + std::string(ansi::BRIGHT_GREEN)
                 + ">> Key Pool Details" + ansi::RESET);
-            row++;
+            emit(buf, row++, 1, "");
         }
 
         for (size_t i = 0; i < keys.size(); i++) {
@@ -739,7 +739,7 @@ private:
                 + "  |  Cooldown: " + (k.cooldown_remaining_sec > 0 ? std::to_string(k.cooldown_remaining_sec) + "s" : "none")
                 + ansi::RESET);
 
-            row++;
+            emit(buf, row++, 1, "");
         }
 
         if (keys.empty() && row < max_h) {
@@ -753,7 +753,7 @@ private:
         if (row < max_h) {
             emit(buf, row++, 1, std::string(ansi::BOLD) + std::string(ansi::BRIGHT_GREEN)
                 + ">> Activity Log" + ansi::RESET);
-            row++;
+            emit(buf, row++, 1, "");
         }
 
         auto logs = get_log_snapshot();
