@@ -975,7 +975,7 @@ private:
         }
 
         if (row < max_h) {
-            emit(buf, row++, 1, std::string(ansi::DIM) + "  Note: This TUI simulates provider config. Real multi-provider routing is not yet wired into backend." + ansi::RESET);
+            emit(buf, row++, 1, std::string(ansi::DIM) + "  Note: TUI changes (E/P/S/R) sync live to ProviderManager for routing." + ansi::RESET);
         }
 
         return row;

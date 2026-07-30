@@ -13,6 +13,8 @@
 #include <memory>
 #include <functional>
 #include <cstring>
+#include <tuple>
+#include <utility>
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -537,10 +539,6 @@ int main() {
 		}
 		return;
 	}
-
-	LOG_ERROR("AnthropicAPI", "All backends failed.");
-	res.status = 502;
-	res.set_content(make_anthropic_error("overloaded_error", "All backends failed").dump(), "application/json");
 };
 
 	svr.Post("/v1/messages", handle_anthropic_messages);
@@ -785,4 +783,4 @@ int main() {
 	g_logger.set_tui_mode(false);
 	curl_global_cleanup();
 	return 0;
-}
+
