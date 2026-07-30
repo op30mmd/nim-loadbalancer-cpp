@@ -42,6 +42,7 @@ vcpkg_installed/
 # API keys / secrets
 *.env
 .env
+keys.txt
 
 # OS
 .DS_Store

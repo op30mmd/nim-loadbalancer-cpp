@@ -6,6 +6,7 @@
 #include <condition_variable>
 #include <atomic>
 #include <memory>
+#include <functional>
 #include <thread>
 #include <chrono>
 #include <regex>
@@ -252,6 +253,7 @@ struct LambdaState {
 	std::shared_ptr<ProxyContext> ctx;
 	CURL* curl = nullptr;
 	struct curl_slist* headers_list = nullptr;
+	std::function<void()> on_destroy;
 
 	~LambdaState() {
 		if (ctx) {
@@ -271,5 +273,6 @@ struct LambdaState {
 		auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
 			std::chrono::steady_clock::now() - stream_start).count() / 1000.0;
 		LOG_INFO("Stream", "Session terminated | Duration: " + std::to_string(duration) + "s | Lines: " + std::to_string(lines_emitted) + " | Size: " + std::to_string(total_bytes / 1024.0) + " KB");
+		if (on_destroy) on_destroy();
 	}
 };

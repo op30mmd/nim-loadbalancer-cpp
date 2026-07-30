@@ -8,6 +8,7 @@
 #include <iomanip>
 #include <ctime>
 #include <chrono>
+#include <functional>
 
 enum class LogLevel {
 	LEVEL_DEBUG,
@@ -22,6 +23,8 @@ private:
 	std::ofstream log_file;
 	LogLevel min_level = LogLevel::LEVEL_DEBUG;
 	bool file_enabled = false;
+	bool tui_mode = false;
+	std::function<void(const std::string&)> tui_callback;
 
 public:
 	void init(LogLevel level = LogLevel::LEVEL_DEBUG, const std::string& filename = "proxy.log") {
@@ -32,6 +35,12 @@ public:
 				file_enabled = true;
 			}
 		}
+	}
+
+	void set_tui_mode(bool enabled, std::function<void(const std::string&)> callback = nullptr) {
+		std::unique_lock<std::mutex> lock(mtx);
+		tui_mode = enabled;
+		tui_callback = callback;
 	}
 
 	void log(LogLevel level, const std::string& tag, const std::string& message) {
@@ -75,13 +84,25 @@ public:
 			break;
 		}
 
+		std::string plain_line = "[" + time_str + "] [" + level_str + "] [" + tag + "] " + message;
+		std::string colored_line = "[" + time_str + "] [" + color_code + level_str + reset_code + "] [" + tag + "] " + message;
+
 		{
 			std::unique_lock<std::mutex> lock(mtx);
-			std::cout << "[" << time_str << "] [" << color_code << level_str << reset_code << "] [" << tag << "] " << message << "\n";
+
+			// In TUI mode, suppress stdout (the TUI owns the screen)
+			if (!tui_mode) {
+				std::cout << colored_line << "\n";
+			}
 
 			if (file_enabled && log_file.is_open()) {
-				log_file << "[" << time_str << "] [" << level_str << "] [" << tag << "] " << message << "\n";
+				log_file << plain_line << "\n";
 				log_file.flush();
+			}
+
+			// Feed to TUI callback
+			if (tui_mode && tui_callback) {
+				tui_callback(colored_line);
 			}
 		}
 	}
