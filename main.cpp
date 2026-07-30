@@ -50,9 +50,23 @@ int main() {
 	auto keys = load_api_keys();
 	LOG_INFO("Startup", "Loaded " + std::to_string(keys.size()) + " API key(s).");
 
-	KeyManager key_manager(keys);
+	auto env_int = [](const char* name, int fallback) -> int {
+		const char* raw = std::getenv(name);
+		if (raw && *raw) {
+			try { return std::stoi(raw); } catch (...) {}
+		}
+		return fallback;
+	};
+	int key_cooldown = env_int("KEY_COOLDOWN_SECONDS", 60);
+	int key_max_cooldown = env_int("KEY_MAX_COOLDOWN_SECONDS", 1800);
+
+	KeyManager key_manager(keys, key_cooldown, key_max_cooldown);
 	ClientSideBackoff backoff_manager(2, 1.0);
 	ModelCache model_cache(3600);
+
+	LOG_INFO("Startup", "Key rotation: round-robin with adaptive backoff | keys=" + std::to_string(keys.size())
+		+ " | base=" + std::to_string(key_cooldown) + "s"
+		+ " | cap=" + std::to_string(key_max_cooldown) + "s");
 
 	std::atomic<bool> shutdown(false);
 	std::thread sync_thread(run_sync_config_task, std::ref(key_manager), std::ref(shutdown));
@@ -80,6 +94,25 @@ int main() {
 		nlohmann::json h = {{"status", "ok"}, {"service", "nim-proxy-cpp"}};
 		res.status = 200;
 		res.set_content(h.dump(), "application/json");
+	});
+
+	// --- ENDPOINT: GET /v1/keys (rotation health, masked) ---
+	svr.Get("/v1/keys", [&](const httplib::Request&, httplib::Response& res) {
+		auto snap = key_manager.snapshot();
+		nlohmann::json arr = nlohmann::json::array();
+		for (const auto& s : snap) {
+			arr.push_back({
+				{"key", s.masked},
+				{"state", s.state},
+				{"consecutive_failures", s.consecutive_failures},
+				{"total_requests", s.total_requests},
+				{"total_successes", s.total_successes},
+				{"total_failures", s.total_failures},
+				{"cooldown_seconds_remaining", s.cooldown_remaining_sec}
+			});
+		}
+		res.status = 200;
+		res.set_content(nlohmann::json({{"strategy", "round-robin"}, {"keys", arr}}).dump(), "application/json");
 	});
 
 	// --- ENDPOINT: GET /v1/models & GET /models ---
@@ -149,8 +182,9 @@ int main() {
 				continue;
 			}
 
-			if (http_code == 200) {
-				LOG_INFO("ModelsAPI", "Catalog successfully fetched and cached.");
+		if (http_code == 200) {
+			key_manager.mark_success(key);
+			LOG_INFO("ModelsAPI", "Catalog successfully fetched and cached.");
 				model_cache.set(write_buf.data);
 				res.status = 200;
 				res.set_content(write_buf.data, "application/json");
@@ -377,12 +411,14 @@ int main() {
 					}
 				}
 
-				res.status = status_code;
-				res.set_content(make_anthropic_error(err_type, err_msg).dump(), "application/json");
-				return;
-			}
+			res.status = status_code;
+			res.set_content(make_anthropic_error(err_type, err_msg).dump(), "application/json");
+			return;
+		}
 
-			if (ctx->is_stream) {
+		key_manager.mark_success(key);
+
+		if (ctx->is_stream) {
 				auto lstate = std::make_shared<LambdaState>();
 				lstate->curl_thread = curl_thread;
 				lstate->ctx = ctx;
@@ -585,13 +621,15 @@ int main() {
 				curl_easy_cleanup(curl);
 				curl_slist_free_all(headers_list);
 
-				LOG_WARN("OpenAIAPI", "Non-200 upstream error: " + std::to_string(status_code));
-				res.status = status_code;
-				res.set_content(ctx->full_body_buffer, ctx->content_type);
-				return;
-			}
+			LOG_WARN("OpenAIAPI", "Non-200 upstream error: " + std::to_string(status_code));
+			res.status = status_code;
+			res.set_content(ctx->full_body_buffer, ctx->content_type);
+			return;
+		}
 
-			if (ctx->is_stream) {
+		key_manager.mark_success(key);
+
+		if (ctx->is_stream) {
 				auto lstate = std::make_shared<LambdaState>();
 				lstate->curl_thread = curl_thread;
 				lstate->ctx = ctx;
@@ -657,6 +695,7 @@ int main() {
 
 	LOG_INFO("Server", "NVIDIA NIM Proxy listening on http://127.0.0.1:8100");
 	LOG_INFO("Server", " - Health Endpoint:    http://127.0.0.1:8100/health");
+	LOG_INFO("Server", " - Keys Endpoint:      http://127.0.0.1:8100/v1/keys");
 	LOG_INFO("Server", " - Models Endpoint:    http://127.0.0.1:8100/v1/models");
 	LOG_INFO("Server", " - OpenAI Endpoint:    http://127.0.0.1:8100/v1/chat/completions");
 	LOG_INFO("Server", " - Anthropic Endpoint: http://127.0.0.1:8100/v1/messages");
