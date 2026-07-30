@@ -28,6 +28,7 @@
     <ClInclude Include="key_manager.h" />
     <ClInclude Include="logger.h" />
     <ClInclude Include="proxy_config.h" />
+    <ClInclude Include="provider_manager.h" />
     <ClInclude Include="stats_collector.h" />
     <ClInclude Include="tui_panel.h" />
     <ClInclude Include="utils.h" />

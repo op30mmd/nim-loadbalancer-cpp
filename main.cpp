@@ -15,6 +15,12 @@
 #include <cstring>
 #include <tuple>
 #include <utility>
+#include <algorithm>
+#include <chrono>
+#include <thread>
+#include <atomic>
+#include <cstdlib>
+#include <ctime>
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
