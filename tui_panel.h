@@ -606,12 +606,23 @@ private:
 
         // ─── Footer ───
         row++;
-        int spark_w = (std::max)(20, max_w - 30);
+        int avail = max_w - 26;
+        if (avail < 10) avail = 10;
+        int tp_w = (std::max)(6, avail * 3 / 5);
+        int err_w = (std::max)(4, avail - tp_w);
+        if (24 + tp_w + err_w > max_w - 2) {
+            int excess = (24 + tp_w + err_w) - (max_w - 2);
+            err_w = (std::max)(4, err_w - excess);
+            if (24 + tp_w + err_w > max_w - 2) {
+                tp_w = (std::max)(6, max_w - 28);
+                err_w = 4;
+            }
+        }
         if (row < max_h - 1) {
             emit(buf, row++, 1, std::string(ansi::DIM) + " Throughput: " + ansi::RESET
-                + sparkline(snap.throughput_series, spark_w, ansi::BRIGHT_CYAN)
-                + std::string(ansi::DIM) + "  Errors: " + ansi::RESET
-                + sparkline(snap.error_rate_series, (std::max)(10, spark_w / 2), ansi::BRIGHT_RED));
+                + sparkline(snap.throughput_series, tp_w, ansi::BRIGHT_CYAN)
+                + std::string(ansi::DIM) + "   Errors: " + ansi::RESET
+                + sparkline(snap.error_rate_series, err_w, ansi::BRIGHT_RED));
         }
         if (row < max_h) {
             emit(buf, row++, 1, std::string(ansi::DIM) + " [1]Overview [2]Keys [3]Logs  [q]Quit  [Tab]Next" + ansi::RESET);
