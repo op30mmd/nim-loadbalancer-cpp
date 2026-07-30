@@ -627,19 +627,19 @@ private:
 
         row++;
 
-        // ─── Throughput Chart ───
+        // ─── Throughput Chart (dynamically sized to fill remaining screen down to bottom row max_h) ───
         int chart_w = (std::max)(20, max_w - 4);
-        if (row < max_h) {
+        if (row < max_h - 1) {
             emit(buf, row++, 1, std::string(ansi::BOLD) + std::string(ansi::BRIGHT_GREEN) + ">> Throughput (reqs/5s)" + ansi::RESET);
         }
-        auto chart = area_chart(snap.throughput_series, chart_w, 5, ansi::BRIGHT_CYAN, ansi::CYAN);
+        int chart_h = (std::max)(3, max_h - row);
+        auto chart = area_chart(snap.throughput_series, chart_w, chart_h, ansi::BRIGHT_CYAN, ansi::CYAN);
         for (const auto& line : chart) {
-            if (row >= max_h - 3) break;
+            if (row >= max_h) break;
             emit(buf, row++, 1, "  " + line);
         }
 
-        // ─── Footer ───
-        row++;
+        // ─── Footer Sparklines (anchored to bottom row max_h) ───
         int avail = max_w - 26;
         if (avail < 10) avail = 10;
         int tp_w = (std::max)(6, avail * 3 / 5);
@@ -652,15 +652,13 @@ private:
                 err_w = 4;
             }
         }
-        if (row < max_h) {
-            emit(buf, row++, 1, std::string(ansi::DIM) + " Throughput: " + ansi::RESET
-                + sparkline(snap.throughput_series, tp_w, ansi::BRIGHT_CYAN)
-                + " "
-                + std::string(ansi::DIM) + "  Errors: " + ansi::RESET
-                + sparkline(snap.error_rate_series, err_w, ansi::BRIGHT_RED));
-        }
+        emit(buf, max_h, 1, std::string(ansi::DIM) + " Throughput: " + ansi::RESET
+            + sparkline(snap.throughput_series, tp_w, ansi::BRIGHT_CYAN)
+            + " "
+            + std::string(ansi::DIM) + "  Errors: " + ansi::RESET
+            + sparkline(snap.error_rate_series, err_w, ansi::BRIGHT_RED));
 
-        return row;
+        return max_h + 1;
     }
 
     int render_keys_detail(std::string& buf, int row, int max_w, int max_h,
