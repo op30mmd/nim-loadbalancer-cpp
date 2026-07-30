@@ -82,7 +82,7 @@ private:
 	std::mutex mtx;
 
 public:
-	ClientSideBackoff(int max_concurrent = 2, double interval = 1.0)
+	ClientSideBackoff(int max_concurrent = 2, double interval = 1.71)  // ~35 RPM safe margin
 		: sem(max_concurrent), min_interval(interval) {
 		last_request_time = std::chrono::steady_clock::now() - std::chrono::milliseconds(2000);
 		global_backoff_until = std::chrono::steady_clock::now();
