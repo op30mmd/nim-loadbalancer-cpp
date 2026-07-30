@@ -117,21 +117,23 @@ inline void enable_raw_mode() {
     HANDLE h = GetStdHandle(STD_INPUT_HANDLE);
     DWORD mode;
     GetConsoleMode(h, &mode);
-    mode &= ~(ENABLE_ECHO_INPUT | ENABLE_LINE_INPUT | ENABLE_PROCESSED_INPUT);
+    mode &= ~(ENABLE_ECHO_INPUT | ENABLE_LINE_INPUT | ENABLE_PROCESSED_INPUT | 0x0010);
     SetConsoleMode(h, mode);
-    // Enable virtual terminal processing for ANSI codes
+    // Enable virtual terminal processing for ANSI codes, disable auto-wrap
     HANDLE out = GetStdHandle(STD_OUTPUT_HANDLE);
     DWORD out_mode;
     GetConsoleMode(out, &out_mode);
     out_mode |= 0x0004; // ENABLE_VIRTUAL_TERMINAL_PROCESSING
+    out_mode &= ~0x0002; // Disable ENABLE_WRAP_AT_EOL_OUTPUT to prevent auto-wrap scrolling
     SetConsoleMode(out, out_mode);
+    SetConsoleOutputCP(CP_UTF8);
 }
 
 inline void disable_raw_mode() {
     HANDLE h = GetStdHandle(STD_INPUT_HANDLE);
     DWORD mode;
     GetConsoleMode(h, &mode);
-    mode |= (ENABLE_ECHO_INPUT | ENABLE_LINE_INPUT | ENABLE_PROCESSED_INPUT);
+    mode |= (ENABLE_ECHO_INPUT | ENABLE_LINE_INPUT | ENABLE_PROCESSED_INPUT | 0x0010);
     SetConsoleMode(h, mode);
 }
 
@@ -166,6 +168,7 @@ namespace ansi {
     const char* const SHOW_CURSOR = "\033[?25h";
     const char* const CLEAR_SCREEN = "\033[2J";
     const char* const CLEAR_EOL = "\033[K";
+    const char* const CLEAR_EOS = "\033[J";
 
     // Colors
     const char* const RED     = "\033[31m";
@@ -238,35 +241,24 @@ inline std::string pad_left(const std::string& s, size_t width) {
     return std::string(width - s.size(), ' ') + s;
 }
 
-// Draw a horizontal bar chart using Unicode block characters
+// Draw a horizontal bar chart using clean ASCII characters (100% portable across Windows/Unix terminals)
 inline std::string bar(double value, double max_val, int width,
                        const char* color = ansi::BRIGHT_CYAN) {
-    if (max_val <= 0 || value <= 0 || width <= 0) return std::string(width, ' ');
+    if (max_val <= 0 || value <= 0 || width <= 0) return std::string(width, '-');
     double ratio = (std::min)(value / max_val, 1.0);
     int filled = (int)(ratio * width);
-    int partial = (int)((ratio * width - filled) * 8);
-
-    static const char* blocks[] = {" ", "\xe2\x96\x8f", "\xe2\x96\x8e", "\xe2\x96\x8d",
-                                    "\xe2\x96\x8c", "\xe2\x96\x8b", "\xe2\x96\x8a", "\xe2\x96\x89"};
 
     std::string result = std::string(color);
-    for (int i = 0; i < filled && i < width; i++) result += "\xe2\x96\x88"; // full block
-    if (filled < width && partial > 0) {
-        result += blocks[partial];
-        filled++;
-    }
+    for (int i = 0; i < filled && i < width; i++) result += '#'; // full block
     result += ansi::RESET;
-    if (filled < width) result += std::string(width - filled, ' ');
+    if (filled < width) result += std::string(width - filled, '-');
     return result;
 }
 
-// Draw a sparkline from a time series
+// Draw a sparkline from a time series using clean ASCII characters
 inline std::string sparkline(const std::vector<TimeSeriesPoint>& series, int width,
                              const char* color = ansi::BRIGHT_CYAN) {
-    static const char* chars[] = {
-        "\xe2\x96\x81", "\xe2\x96\x82", "\xe2\x96\x83", "\xe2\x96\x84",
-        "\xe2\x96\x85", "\xe2\x96\x86", "\xe2\x96\x87", "\xe2\x96\x88"
-    };
+    static const char chars[] = {' ', '.', '-', '=', '*', '#'};
 
     if (series.empty() || width <= 0) return std::string(width, ' ');
 
@@ -283,9 +275,9 @@ inline std::string sparkline(const std::vector<TimeSeriesPoint>& series, int wid
 
     std::string result = std::string(color);
     for (size_t i = 0; i < (size_t)width && i < vals.size(); i++) {
-        int idx = (int)(vals[i] / max_val * 7.0);
+        int idx = (int)(vals[i] / max_val * 5.0);
         if (idx < 0) idx = 0;
-        if (idx > 7) idx = 7;
+        if (idx > 5) idx = 5;
         result += chars[idx];
     }
     result += ansi::RESET;
@@ -431,32 +423,42 @@ private:
         fflush(stdout);
     }
 
+    void emit(std::string& buf, int row, int col, const std::string& text) {
+        buf += ansi::move(row, col);
+        buf += ansi::CLEAR_EOL;
+        buf += text;
+    }
+
     void emit(int row, int col, const std::string& text) {
         printf("%s%s%s", ansi::move(row, col).c_str(), ansi::CLEAR_EOL, text.c_str());
     }
 
     void render() {
-        printf("%s%s", ansi::CLEAR_SCREEN, ansi::move(1, 1).c_str());
-        
         int W = term::get_width();
         int H = term::get_height();
+        int max_w = (std::max)(10, W - 1);
+        int max_h = (std::max)(5, H - 1);
         int row = 1;
 
         auto snap = stats.snapshot();
         auto keys = key_manager.snapshot();
 
+        std::string buf;
+        buf.reserve(8192);
+        buf += ansi::move(1, 1);
+
         // ─── Header ─────────────────────────────────────────────────
         std::string title = " NVIDIA NIM Load Balancer ";
-        int title_pad = (W - (int)title.size()) / 2;
+        int title_pad = (max_w - (int)title.size()) / 2;
         if (title_pad < 1) title_pad = 1;
 
-        emit(row++, 1, std::string(ansi::BG_BLUE) + std::string(ansi::BOLD) + std::string(ansi::WHITE)
-            + std::string(W, ' ') + ansi::RESET);
-        emit(row++, 1, std::string(ansi::BG_BLUE) + std::string(ansi::BOLD) + std::string(ansi::WHITE)
-            + std::string(title_pad, ' ') + title + std::string(W - title_pad - (int)title.size(), ' ')
+        emit(buf, row++, 1, std::string(ansi::BG_BLUE) + std::string(ansi::BOLD) + std::string(ansi::WHITE)
+            + std::string(max_w, ' ') + ansi::RESET);
+        emit(buf, row++, 1, std::string(ansi::BG_BLUE) + std::string(ansi::BOLD) + std::string(ansi::WHITE)
+            + std::string(title_pad, ' ') + title + std::string(max_w - title_pad - (int)title.size(), ' ')
             + ansi::RESET);
-        emit(row++, 1, std::string(ansi::BG_BLUE) + std::string(ansi::BOLD) + std::string(ansi::WHITE)
-            + std::string(W, ' ') + ansi::RESET);
+        emit(buf, row++, 1, std::string(ansi::BG_BLUE) + std::string(ansi::BOLD) + std::string(ansi::WHITE)
+            + std::string(max_w, ' ') + ansi::RESET);
 
         // Status bar
         std::string status_color = ansi::BG_GREEN;
@@ -465,10 +467,10 @@ private:
         std::string keys_str = " Keys: " + std::to_string(keys.size()) + " ";
         std::string streams_str = " Streams: " + std::to_string(snap.active_streams) + " ";
         std::string addr_str = " http://127.0.0.1:8100 ";
-        int status_pad = W - 9 - (int)uptime_str.size() - (int)keys_str.size() - (int)streams_str.size() - (int)addr_str.size();
+        int status_pad = max_w - 9 - (int)uptime_str.size() - (int)keys_str.size() - (int)streams_str.size() - (int)addr_str.size();
         if (status_pad < 0) status_pad = 0;
 
-        emit(row++, 1, std::string(status_color) + std::string(ansi::BOLD) + std::string(ansi::WHITE)
+        emit(buf, row++, 1, std::string(status_color) + std::string(ansi::BOLD) + std::string(ansi::WHITE)
             + status_text + ansi::RESET
             + std::string(ansi::BG_GRAY) + std::string(ansi::WHITE)
             + uptime_str + keys_str + streams_str + addr_str
@@ -487,32 +489,41 @@ private:
             }
         }
         tabs += std::string(ansi::DIM) + "  [Tab] switch  [q] quit" + ansi::RESET;
-        emit(row++, 1, tabs);
+        emit(buf, row++, 1, tabs);
 
         // Separator
-        emit(row++, 1, std::string(ansi::DIM) + std::string(W - 1, '\xe2\x94\x80') + ansi::RESET);
+        emit(buf, row++, 1, std::string(ansi::DIM) + std::string(max_w, '-') + ansi::RESET);
         row++;
 
         // ─── Tab Content ────────────────────────────────────────────
         if (selected_tab == 0) {
-            row = render_overview(row, W, H, snap, keys);
+            row = render_overview(buf, row, max_w, max_h, snap, keys);
         } else if (selected_tab == 1) {
-            row = render_keys_detail(row, W, H, snap, keys);
+            row = render_keys_detail(buf, row, max_w, max_h, snap, keys);
         } else {
-            row = render_logs(row, W, H);
+            row = render_logs(buf, row, max_w, max_h);
         }
+
+        buf += ansi::move(row, 1);
+        buf += ansi::CLEAR_EOS;
+
+        fwrite(buf.data(), 1, buf.size(), stdout);
         fflush(stdout);
     }
 
-    int render_overview(int row, int W, int H, const StatsSnapshot& snap,
+    int render_overview(std::string& buf, int row, int max_w, int max_h,
+                        const StatsSnapshot& snap,
                         const std::vector<KeySnapshot>& keys) {
         // ─── Traffic Statistics ───
-        emit(row++, 1, std::string(ansi::BOLD) + std::string(ansi::BRIGHT_GREEN) + "◆ Traffic Statistics" + ansi::RESET);
-        row++;
+        if (row < max_h) {
+            emit(buf, row++, 1, std::string(ansi::BOLD) + std::string(ansi::BRIGHT_GREEN) + ">> Traffic Statistics" + ansi::RESET);
+            row++;
+        }
 
         auto stat_line = [&](const std::string& label, const std::string& value, const char* color) {
+            if (row >= max_h) return;
             std::string padded_label = pad_right(label, 20);
-            emit(row, 1, std::string("  ") + std::string(ansi::DIM) + padded_label + ansi::RESET
+            emit(buf, row, 1, std::string("  ") + std::string(ansi::DIM) + padded_label + ansi::RESET
                 + std::string(color) + std::string(ansi::BOLD) + value + ansi::RESET);
             row++;
         };
@@ -532,34 +543,40 @@ private:
         row++;
 
         // ─── Latency ───
-        emit(row++, 1, std::string(ansi::BOLD) + std::string(ansi::BRIGHT_GREEN) + "◆ Latency" + ansi::RESET);
-        row++;
-        stat_line("Average:", format_number(snap.avg_latency_ms) + " ms", ansi::BRIGHT_CYAN);
-        stat_line("P95:", format_number(snap.p95_latency_ms) + " ms",
-                  snap.p95_latency_ms < 2000 ? ansi::BRIGHT_GREEN : ansi::BRIGHT_YELLOW);
-        stat_line("P99:", format_number(snap.p99_latency_ms) + " ms",
-                  snap.p99_latency_ms < 5000 ? ansi::BRIGHT_GREEN : ansi::BRIGHT_YELLOW);
-        stat_line("Min / Max:", format_number(snap.min_latency_ms) + " / "
-                  + format_number(snap.max_latency_ms) + " ms", ansi::WHITE);
+        if (row < max_h) {
+            emit(buf, row++, 1, std::string(ansi::BOLD) + std::string(ansi::BRIGHT_GREEN) + ">> Latency" + ansi::RESET);
+            row++;
+            stat_line("Average:", format_number(snap.avg_latency_ms) + " ms", ansi::BRIGHT_CYAN);
+            stat_line("P95:", format_number(snap.p95_latency_ms) + " ms",
+                      snap.p95_latency_ms < 2000 ? ansi::BRIGHT_GREEN : ansi::BRIGHT_YELLOW);
+            stat_line("P99:", format_number(snap.p99_latency_ms) + " ms",
+                      snap.p99_latency_ms < 5000 ? ansi::BRIGHT_GREEN : ansi::BRIGHT_YELLOW);
+            stat_line("Min / Max:", format_number(snap.min_latency_ms) + " / "
+                      + format_number(snap.max_latency_ms) + " ms", ansi::WHITE);
+        }
 
         row++;
 
         // ─── Key Health ───
-        emit(row++, 1, std::string(ansi::BOLD) + std::string(ansi::BRIGHT_GREEN) + "◆ Key Health" + ansi::RESET);
-        row++;
+        if (row < max_h) {
+            emit(buf, row++, 1, std::string(ansi::BOLD) + std::string(ansi::BRIGHT_GREEN) + ">> Key Health" + ansi::RESET);
+            row++;
+        }
 
         // Table header
-        int key_name_w = (std::min)(15, W - 50);
+        int key_name_w = (std::min)(15, max_w - 50);
         std::string hdr = "  " + pad_right("Key", key_name_w) + " "
             + pad_left("State", 9) + " "
             + pad_left("Reqs", 6) + " "
             + pad_left("OK", 5) + " "
             + pad_left("Fail", 5) + " "
             + pad_left("CD", 4);
-        emit(row++, 1, std::string(ansi::DIM) + hdr + ansi::RESET);
+        if (row < max_h) {
+            emit(buf, row++, 1, std::string(ansi::DIM) + hdr + ansi::RESET);
+        }
 
         for (const auto& k : keys) {
-            if (row >= H - 10) break;
+            if (row >= max_h - 10) break;
             std::string state_str = (k.state == "available") ? "ready" : "cooldown";
             std::string state_color = (k.state == "available") ? ansi::GREEN : ansi::RED;
             std::string cd_str = k.cooldown_remaining_sec > 0 ? std::to_string(k.cooldown_remaining_sec) + "s" : "-";
@@ -571,40 +588,49 @@ private:
                 + ansi::GREEN + pad_left(std::to_string(k.total_successes), 5) + ansi::RESET + " "
                 + fail_color + pad_left(std::to_string(k.total_failures), 5) + ansi::RESET + " "
                 + pad_left(cd_str, 4);
-            emit(row++, 1, line);
+            emit(buf, row++, 1, line);
         }
 
         row++;
 
         // ─── Throughput Chart ───
-        int chart_w = (std::max)(20, W - 4);
-        emit(row++, 1, std::string(ansi::BOLD) + std::string(ansi::BRIGHT_GREEN) + "◆ Throughput (reqs/5s)" + ansi::RESET);
+        int chart_w = (std::max)(20, max_w - 4);
+        if (row < max_h) {
+            emit(buf, row++, 1, std::string(ansi::BOLD) + std::string(ansi::BRIGHT_GREEN) + ">> Throughput (reqs/5s)" + ansi::RESET);
+        }
         auto chart = area_chart(snap.throughput_series, chart_w, 5, ansi::BRIGHT_CYAN, ansi::CYAN);
         for (const auto& line : chart) {
-            if (row >= H - 4) break;
-            emit(row++, 1, "  " + line);
+            if (row >= max_h - 3) break;
+            emit(buf, row++, 1, "  " + line);
         }
 
         // ─── Footer ───
-        row = H - 3;
-        int spark_w = (std::max)(20, W - 30);
-        emit(row++, 1, std::string(ansi::DIM) + " Throughput: " + ansi::RESET
-            + sparkline(snap.throughput_series, spark_w, ansi::BRIGHT_CYAN)
-            + std::string(ansi::DIM) + "  Errors: " + ansi::RESET
-            + sparkline(snap.error_rate_series, (std::max)(10, spark_w / 2), ansi::BRIGHT_RED));
-        emit(row++, 1, std::string(ansi::DIM) + " [1]Overview [2]Keys [3]Logs  [q]Quit  [Tab]Next" + ansi::RESET);
+        row++;
+        int spark_w = (std::max)(20, max_w - 30);
+        if (row < max_h - 1) {
+            emit(buf, row++, 1, std::string(ansi::DIM) + " Throughput: " + ansi::RESET
+                + sparkline(snap.throughput_series, spark_w, ansi::BRIGHT_CYAN)
+                + std::string(ansi::DIM) + "  Errors: " + ansi::RESET
+                + sparkline(snap.error_rate_series, (std::max)(10, spark_w / 2), ansi::BRIGHT_RED));
+        }
+        if (row < max_h) {
+            emit(buf, row++, 1, std::string(ansi::DIM) + " [1]Overview [2]Keys [3]Logs  [q]Quit  [Tab]Next" + ansi::RESET);
+        }
 
         return row;
     }
 
-    int render_keys_detail(int row, int W, int H, const StatsSnapshot& snap,
+    int render_keys_detail(std::string& buf, int row, int max_w, int max_h,
+                           const StatsSnapshot& snap,
                            const std::vector<KeySnapshot>& keys) {
-        emit(row++, 1, std::string(ansi::BOLD) + std::string(ansi::BRIGHT_GREEN)
-            + "◆ Key Pool Details" + ansi::RESET);
-        row++;
+        if (row < max_h) {
+            emit(buf, row++, 1, std::string(ansi::BOLD) + std::string(ansi::BRIGHT_GREEN)
+                + ">> Key Pool Details" + ansi::RESET);
+            row++;
+        }
 
         for (size_t i = 0; i < keys.size(); i++) {
-            if (row >= H - 4) break;
+            if (row >= max_h - 4) break;
             const auto& k = keys[i];
 
             std::string state_badge;
@@ -614,22 +640,22 @@ private:
                 state_badge = std::string(ansi::BG_RED) + std::string(ansi::BOLD) + std::string(ansi::WHITE) + " COOLDOWN " + ansi::RESET;
             }
 
-            emit(row++, 1, std::string(ansi::BOLD) + "  Key #" + std::to_string(i + 1)
+            emit(buf, row++, 1, std::string(ansi::BOLD) + "  Key #" + std::to_string(i + 1)
                 + " " + k.masked + ansi::RESET + "  " + state_badge);
 
             double success_rate = k.total_requests > 0 ? (double)k.total_successes / k.total_requests * 100.0 : 0;
             std::string sr_color = success_rate >= 95 ? ansi::BRIGHT_GREEN :
                                    success_rate >= 80 ? ansi::BRIGHT_YELLOW : ansi::BRIGHT_RED;
 
-            int bar_w = (std::max)(10, W - 40);
+            int bar_w = (std::max)(10, max_w - 40);
             std::string health_bar = bar(success_rate, 100.0, bar_w,
                                          success_rate >= 95 ? ansi::BRIGHT_GREEN :
                                          success_rate >= 80 ? ansi::BRIGHT_YELLOW : ansi::BRIGHT_RED);
 
-            emit(row++, 1, "    Success Rate: " + health_bar + " " + sr_color
+            emit(buf, row++, 1, "    Success Rate: " + health_bar + " " + sr_color
                 + format_number(success_rate) + "%" + ansi::RESET);
 
-            emit(row++, 1, std::string(ansi::DIM) + "    Requests: " + std::to_string(k.total_requests)
+            emit(buf, row++, 1, std::string(ansi::DIM) + "    Requests: " + std::to_string(k.total_requests)
                 + "  |  Successes: " + std::to_string(k.total_successes)
                 + "  |  Failures: " + std::to_string(k.total_failures)
                 + "  |  Consecutive: " + std::to_string(k.consecutive_failures)
@@ -639,24 +665,28 @@ private:
             row++;
         }
 
-        if (keys.empty()) {
-            emit(row++, 1, std::string(ansi::YELLOW) + "  No API keys configured." + ansi::RESET);
+        if (keys.empty() && row < max_h) {
+            emit(buf, row++, 1, std::string(ansi::YELLOW) + "  No API keys configured." + ansi::RESET);
         }
 
         // Footer
-        row = H - 2;
-        emit(row++, 1, std::string(ansi::DIM) + " [1]Overview [2]Keys [3]Logs  [q]Quit" + ansi::RESET);
+        row++;
+        if (row < max_h) {
+            emit(buf, row++, 1, std::string(ansi::DIM) + " [1]Overview [2]Keys [3]Logs  [q]Quit" + ansi::RESET);
+        }
 
         return row;
     }
 
-    int render_logs(int row, int W, int H) {
-        emit(row++, 1, std::string(ansi::BOLD) + std::string(ansi::BRIGHT_GREEN)
-            + "◆ Activity Log" + ansi::RESET);
-        row++;
+    int render_logs(std::string& buf, int row, int max_w, int max_h) {
+        if (row < max_h) {
+            emit(buf, row++, 1, std::string(ansi::BOLD) + std::string(ansi::BRIGHT_GREEN)
+                + ">> Activity Log" + ansi::RESET);
+            row++;
+        }
 
         auto logs = get_log_snapshot();
-        int visible = H - row - 3;
+        int visible = max_h - row - 2;
         if (visible < 1) visible = 1;
 
         int start = (int)logs.size() - visible - scroll_offset;
@@ -665,17 +695,19 @@ private:
         if (end > (int)logs.size()) end = (int)logs.size();
 
         for (int i = start; i < end; i++) {
-            if (row >= H - 2) break;
+            if (row >= max_h - 1) break;
             std::string line = logs[i];
-            emit(row++, 1, "  " + truncate(line, W - 4));
+            emit(buf, row++, 1, "  " + truncate(line, max_w - 4));
         }
 
-        if (logs.empty()) {
-            emit(row++, 1, std::string(ansi::DIM) + "  No log entries yet..." + ansi::RESET);
+        if (logs.empty() && row < max_h - 1) {
+            emit(buf, row++, 1, std::string(ansi::DIM) + "  No log entries yet..." + ansi::RESET);
         }
 
-        row = H - 2;
-        emit(row++, 1, std::string(ansi::DIM) + " [1]Overview [2]Keys [3]Logs  [q]Quit  [↑/↓]Scroll" + ansi::RESET);
+        row++;
+        if (row < max_h) {
+            emit(buf, row++, 1, std::string(ansi::DIM) + " [1]Overview [2]Keys [3]Logs  [q]Quit  [Up/Down]Scroll" + ansi::RESET);
+        }
 
         return row;
     }
