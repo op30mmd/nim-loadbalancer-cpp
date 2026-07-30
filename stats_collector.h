@@ -200,7 +200,7 @@ public:
             else break;
         }
         // Scale up if we haven't been running for 60s
-        double window = std::min(elapsed_sec(), 60.0);
+        double window = (std::min)(elapsed_sec(), 60.0);
         if (window > 0) {
             s.requests_per_minute = (double)last_60s / window * 60.0;
         }

@@ -223,7 +223,7 @@ int main() {
 			g_stats.record_request(res.status, elapsed, "/v1/messages", res.status == 200);
 		};
 		struct _StatsGuard {
-			std::function<void()>& fn;
+			std::function<void()> fn;
 			~_StatsGuard() { fn(); }
 		} _stats_guard{_record_stats};
 		res.set_header("anthropic-version", "2023-06-01");
@@ -283,7 +283,7 @@ int main() {
 				int output_tokens = openai_req["max_tokens"].get<int>();
 				if (budget > 0) {
 					// Cap the total: NIM models may not handle very large max_tokens
-					requested_max = std::min(output_tokens + budget, 8192);
+					requested_max = (std::min)(output_tokens + budget, 8192);
 					LOG_INFO("AnthropicAPI", "Thinking enabled: scaled max_tokens from "
 						+ std::to_string(output_tokens)
 						+ " to " + std::to_string(requested_max)
@@ -291,7 +291,7 @@ int main() {
 				}
 				else {
 					// No explicit budget — use a reasonable default
-					requested_max = std::min(std::max(output_tokens * 4, 4096), 8192);
+					requested_max = (std::min)((std::max)(output_tokens * 4, 4096), 8192);
 					LOG_INFO("AnthropicAPI", "Thinking enabled: scaled max_tokens to "
 						+ std::to_string(requested_max) + " (no budget_tokens set)");
 				}
@@ -302,7 +302,7 @@ int main() {
 			int context_window = get_model_context_window(model_id);
 
 			int available = context_window - estimated_input;
-			int upper = std::max(1, available);
+			int upper = (std::max)(1, available);
 			int clamped = (requested_max < 1) ? 1 : ((requested_max > upper) ? upper : requested_max);
 
 			if (clamped != requested_max) {
@@ -448,7 +448,7 @@ int main() {
 				lstate->anthropic_state.model = fallback_model;
 				lstate->anthropic_state.input_tokens = estimate_input_tokens(*anthropic_json);
 				g_stats.stream_started();
-				lstate->on_destroy = []() { g_stats.stream_ended(); };
+				lstate->on_destroy = [&g_stats]() { g_stats.stream_ended(); };
 
 				res.set_chunked_content_provider(
 					"text/event-stream",
@@ -538,7 +538,7 @@ int main() {
 			g_stats.record_request(res.status, elapsed, _ep, res.status == 200);
 		};
 		struct _StatsGuard {
-			std::function<void()>& fn;
+			std::function<void()> fn;
 			~_StatsGuard() { fn(); }
 		} _stats_guard{_record_stats};
 		std::string path = req.path;
@@ -673,7 +673,7 @@ int main() {
 				lstate->curl = curl;
 				lstate->headers_list = headers_list;
 				g_stats.stream_started();
-				lstate->on_destroy = []() { g_stats.stream_ended(); };
+				lstate->on_destroy = [&g_stats]() { g_stats.stream_ended(); };
 
 				res.set_chunked_content_provider(
 					ctx->content_type,

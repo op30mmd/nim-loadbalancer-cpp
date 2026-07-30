@@ -241,7 +241,7 @@ inline std::string pad_left(const std::string& s, size_t width) {
 inline std::string bar(double value, double max_val, int width,
                        const char* color = ansi::BRIGHT_CYAN) {
     if (max_val <= 0 || value <= 0 || width <= 0) return std::string(width, ' ');
-    double ratio = std::min(value / max_val, 1.0);
+    double ratio = (std::min)(value / max_val, 1.0);
     int filled = (int)(ratio * width);
     int partial = (int)((ratio * width - filled) * 8);
 
@@ -391,7 +391,7 @@ public:
         if (render_thread.joinable()) render_thread.join();
         term::disable_raw_mode();
         printf("%s%s", ansi::SHOW_CURSOR, ansi::CLEAR_SCREEN);
-        printf("%s", ansi::move(1, 1));
+        printf("%s", ansi::move(1, 1).c_str());
         fflush(stdout);
     }
 
@@ -417,7 +417,7 @@ private:
             if (key == '\t' || key == '1') selected_tab = 0;
             if (key == '2') selected_tab = 1;
             if (key == '3') selected_tab = 2;
-            if (key == 1001) scroll_offset = std::max(0, scroll_offset - 1); // UP
+            if (key == 1001) scroll_offset = (std::max)(0, scroll_offset - 1); // UP
             if (key == 1002) scroll_offset++; // DOWN
 
             render();
@@ -426,7 +426,7 @@ private:
 
         term::disable_raw_mode();
         printf("%s%s", ansi::SHOW_CURSOR, ansi::CLEAR_SCREEN);
-        printf("%s", ansi::move(1, 1));
+        printf("%s", ansi::move(1, 1).c_str());
         fflush(stdout);
     }
 
@@ -548,7 +548,7 @@ private:
         rrow++;
 
         // Table header
-        int key_name_w = std::min(12, col_w - 30);
+        int key_name_w = (std::min)(12, col_w - 30);
         std::string hdr = "  " + pad_right("Key", key_name_w) + " "
             + pad_left("State", 9) + " "
             + pad_left("Reqs", 6) + " "
@@ -576,7 +576,7 @@ private:
         rrow += 1;
 
         // ─── Throughput Chart (right column) ───
-        int chart_w = std::max(20, col_w - 4);
+        int chart_w = (std::max)(20, col_w - 4);
         emit(rrow++, right_col, std::string(ansi::BOLD) + std::string(ansi::BRIGHT_GREEN) + "Throughput (reqs/5s)" + ansi::RESET);
         auto chart = area_chart(snap.throughput_series, chart_w, 5, ansi::BRIGHT_CYAN, ansi::CYAN);
         for (const auto& line : chart) {
@@ -595,11 +595,11 @@ private:
 
         // ─── Bottom: Sparklines ───
         row = H - 3;
-        int spark_w = std::max(20, W - 30);
+        int spark_w = (std::max)(20, W - 30);
         emit(row++, 1, std::string(ansi::DIM) + " Throughput: " + ansi::RESET
             + sparkline(snap.throughput_series, spark_w, ansi::BRIGHT_CYAN)
             + std::string(ansi::DIM) + "  Errors: " + ansi::RESET
-            + sparkline(snap.error_rate_series, std::max(10, spark_w / 2), ansi::BRIGHT_RED));
+            + sparkline(snap.error_rate_series, (std::max)(10, spark_w / 2), ansi::BRIGHT_RED));
         emit(row++, 1, std::string(ansi::DIM) + " [1]Overview [2]Keys [3]Logs  [q]Quit  [Tab]Next" + ansi::RESET);
 
         return row;
@@ -629,7 +629,7 @@ private:
             std::string sr_color = success_rate >= 95 ? ansi::BRIGHT_GREEN :
                                    success_rate >= 80 ? ansi::BRIGHT_YELLOW : ansi::BRIGHT_RED;
 
-            int bar_w = std::max(10, W - 40);
+            int bar_w = (std::max)(10, W - 40);
             std::string health_bar = bar(success_rate, 100.0, bar_w,
                                          success_rate >= 95 ? ansi::BRIGHT_GREEN :
                                          success_rate >= 80 ? ansi::BRIGHT_YELLOW : ansi::BRIGHT_RED);

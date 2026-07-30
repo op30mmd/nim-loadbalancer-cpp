@@ -96,11 +96,11 @@ private:
 		case KeyErrorClass::AUTH:
 			// A key that fails auth is probably bad - give it a long rest,
 			// but still let it recover on a later success.
-			base = std::max(base_cooldown, 300);
+			base = (std::max)(base_cooldown, 300);
 			break;
 		case KeyErrorClass::SERVER:
 			// Transient upstream blip - don't punish the key for long.
-			base = std::max(5, base_cooldown / 4);
+			base = (std::max)(5, base_cooldown / 4);
 			break;
 		case KeyErrorClass::RATE_LIMIT:
 		case KeyErrorClass::NETWORK:
