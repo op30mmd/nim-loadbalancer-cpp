@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <functional>
 #include <cstring>
 
 #ifdef _WIN32
@@ -39,6 +40,10 @@
 #include "key_manager.h"
 #include "utils.h"
 #include "anthropic_handler.h"
+#include "stats_collector.h"
+#include "tui_panel.h"
+
+Logger g_logger;
 
 int main() {
 	g_logger.init(LogLevel::LEVEL_DEBUG, "proxy.log");
@@ -69,9 +74,16 @@ int main() {
 		+ " | cap=" + std::to_string(key_max_cooldown) + "s");
 
 	std::atomic<bool> shutdown(false);
-	std::thread sync_thread(run_sync_config_task, std::ref(key_manager), std::ref(shutdown));
+
+	// --- Statistics & TUI ---
+	StatsCollector g_stats;
+	TUIPanel g_tui(key_manager, g_stats, shutdown);
+	g_logger.set_tui_mode(true, [&g_tui](const std::string& line) { g_tui.push_log(line); });
+	g_tui.start();
+
 
 	httplib::Server svr;
+	g_tui.set_stop_callback([&svr]() { svr.stop(); });
 
 	svr.set_read_timeout(600, 0);
 	svr.set_write_timeout(900, 0);
@@ -205,6 +217,16 @@ int main() {
 
 	// --- ANTHROPIC MESSAGES ENDPOINTS: POST /v1/messages & POST /messages ---
 	auto handle_anthropic_messages = [&](const httplib::Request& req, httplib::Response& res) {
+		auto _req_start = std::chrono::steady_clock::now();
+		auto _record_stats = [&]() {
+			auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+				std::chrono::steady_clock::now() - _req_start).count();
+			g_stats.record_request(res.status, elapsed, "/v1/messages", res.status == 200);
+		};
+		struct _StatsGuard {
+			std::function<void()> fn;
+			~_StatsGuard() { fn(); }
+		} _stats_guard{_record_stats};
 		res.set_header("anthropic-version", "2023-06-01");
 
 		auto anthropic_json = std::make_unique<nlohmann::json>();
@@ -262,7 +284,7 @@ int main() {
 				int output_tokens = openai_req["max_tokens"].get<int>();
 				if (budget > 0) {
 					// Cap the total: NIM models may not handle very large max_tokens
-					requested_max = std::min(output_tokens + budget, 8192);
+					requested_max = (std::min)(output_tokens + budget, 8192);
 					LOG_INFO("AnthropicAPI", "Thinking enabled: scaled max_tokens from "
 						+ std::to_string(output_tokens)
 						+ " to " + std::to_string(requested_max)
@@ -270,7 +292,7 @@ int main() {
 				}
 				else {
 					// No explicit budget — use a reasonable default
-					requested_max = std::min(std::max(output_tokens * 4, 4096), 8192);
+					requested_max = (std::min)((std::max)(output_tokens * 4, 4096), 8192);
 					LOG_INFO("AnthropicAPI", "Thinking enabled: scaled max_tokens to "
 						+ std::to_string(requested_max) + " (no budget_tokens set)");
 				}
@@ -281,7 +303,7 @@ int main() {
 			int context_window = get_model_context_window(model_id);
 
 			int available = context_window - estimated_input;
-			int upper = std::max(1, available);
+			int upper = (std::max)(1, available);
 			int clamped = (requested_max < 1) ? 1 : ((requested_max > upper) ? upper : requested_max);
 
 			if (clamped != requested_max) {
@@ -426,6 +448,8 @@ int main() {
 				lstate->headers_list = headers_list;
 				lstate->anthropic_state.model = fallback_model;
 				lstate->anthropic_state.input_tokens = estimate_input_tokens(*anthropic_json);
+				g_stats.stream_started();
+				lstate->on_destroy = [&g_stats]() { g_stats.stream_ended(); };
 
 				res.set_chunked_content_provider(
 					"text/event-stream",
@@ -505,6 +529,19 @@ int main() {
 
 	// --- GENERIC OPENAI WILDCARD ROUTE HANDLER ---
 	auto handle_openai_proxy = [&](const httplib::Request& req, httplib::Response& res) {
+		auto _req_start = std::chrono::steady_clock::now();
+		std::string _ep = req.path;
+		bool _skip_stats = false;
+		auto _record_stats = [&]() {
+			if (_skip_stats) return;
+			auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+				std::chrono::steady_clock::now() - _req_start).count();
+			g_stats.record_request(res.status, elapsed, _ep, res.status == 200);
+		};
+		struct _StatsGuard {
+			std::function<void()> fn;
+			~_StatsGuard() { fn(); }
+		} _stats_guard{_record_stats};
 		std::string path = req.path;
 		if (path.rfind("/v1/", 0) == 0) {
 			path = path.substr(4);
@@ -515,6 +552,7 @@ int main() {
 		// /messages request, delegate to the dedicated Anthropic handler.
 		if (path == "messages") {
 			LOG_INFO("AnthropicAPI", "Delegating misrouted /messages request to Anthropic handler.");
+			_skip_stats = true;  // Anthropic handler records its own stats
 			handle_anthropic_messages(req, res);
 			return;
 		}
@@ -635,6 +673,8 @@ int main() {
 				lstate->ctx = ctx;
 				lstate->curl = curl;
 				lstate->headers_list = headers_list;
+				g_stats.stream_started();
+				lstate->on_destroy = [&g_stats]() { g_stats.stream_ended(); };
 
 				res.set_chunked_content_provider(
 					ctx->content_type,
@@ -703,7 +743,8 @@ int main() {
 	svr.listen("127.0.0.1", 8100);
 
 	shutdown.store(true);
-	if (sync_thread.joinable()) sync_thread.join();
+	g_tui.stop();
+	g_logger.set_tui_mode(false);
 	curl_global_cleanup();
 	return 0;
 }

@@ -20,6 +20,17 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="utils.cpp" />
+    <ClCompile Include="anthropic_handler.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="anthropic_handler.h" />
+    <ClInclude Include="key_manager.h" />
+    <ClInclude Include="logger.h" />
+    <ClInclude Include="proxy_config.h" />
+    <ClInclude Include="stats_collector.h" />
+    <ClInclude Include="tui_panel.h" />
+    <ClInclude Include="utils.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>

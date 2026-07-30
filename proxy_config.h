@@ -6,9 +6,9 @@
 #include <condition_variable>
 #include <atomic>
 #include <memory>
+#include <functional>
 #include <thread>
 #include <chrono>
-#include <regex>
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
@@ -135,10 +135,20 @@ inline size_t custom_header_callback(char* buffer, size_t size, size_t nitems, v
 	}
 
 	if (h.rfind("HTTP/", 0) == 0) {
-		std::regex status_regex(R"(HTTP/[^\s]+\s+(\d+))");
-		std::smatch match;
-		if (std::regex_search(h, match, status_regex)) {
-			ctx->http_status = std::stoi(match[1].str());
+		// Parse status code without regex: "HTTP/1.1 200 OK" -> 200
+		size_t space_pos = h.find(' ');
+		if (space_pos != std::string::npos) {
+			size_t status_start = h.find_first_not_of(' ', space_pos);
+			if (status_start != std::string::npos) {
+				size_t status_end = h.find(' ', status_start);
+				std::string status_str = h.substr(status_start, 
+					status_end == std::string::npos ? std::string::npos : status_end - status_start);
+				try {
+					ctx->http_status = std::stoi(status_str);
+				} catch (...) {
+					// Invalid status code, ignore
+				}
+			}
 		}
 	}
 	else if (!h.empty()) {
@@ -252,6 +262,7 @@ struct LambdaState {
 	std::shared_ptr<ProxyContext> ctx;
 	CURL* curl = nullptr;
 	struct curl_slist* headers_list = nullptr;
+	std::function<void()> on_destroy;
 
 	~LambdaState() {
 		if (ctx) {
@@ -271,5 +282,6 @@ struct LambdaState {
 		auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
 			std::chrono::steady_clock::now() - stream_start).count() / 1000.0;
 		LOG_INFO("Stream", "Session terminated | Duration: " + std::to_string(duration) + "s | Lines: " + std::to_string(lines_emitted) + " | Size: " + std::to_string(total_bytes / 1024.0) + " KB");
+		if (on_destroy) on_destroy();
 	}
 };
