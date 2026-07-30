@@ -61,7 +61,7 @@ int main() {
 	int key_max_cooldown = env_int("KEY_MAX_COOLDOWN_SECONDS", 1800);
 
 	KeyManager key_manager(keys, key_cooldown, key_max_cooldown);
-	ClientSideBackoff backoff_manager(2, 1.0);
+	ClientSideBackoff backoff_manager(2, 1.71);
 	ModelCache model_cache(3600);
 
 	LOG_INFO("Startup", "Key rotation: round-robin with adaptive backoff | keys=" + std::to_string(keys.size())
@@ -73,8 +73,8 @@ int main() {
 
 	httplib::Server svr;
 
-	svr.set_read_timeout(300, 0);
-	svr.set_write_timeout(600, 0);
+	svr.set_read_timeout(600, 0);
+	svr.set_write_timeout(900, 0);
 
 	// --- GLOBAL CORS MIDDLEWARE & OPTIONS PREFLIGHT HANDLER ---
 	svr.set_pre_routing_handler([](const httplib::Request& req, httplib::Response& res) {

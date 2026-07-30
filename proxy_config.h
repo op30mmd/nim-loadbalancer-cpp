@@ -200,14 +200,14 @@ inline void run_curl_request(CURL* curl, ProxyContext* ctx) {
 }
 
 inline void configure_curl_network_stability(CURL* curl) {
-	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 25L);
+	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 30L);
 	curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 1L);
-	curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 180L);
+	curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 300L);   // allow very slow models (NIM free tier)
 	curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L);
-	curl_easy_setopt(curl, CURLOPT_TCP_KEEPIDLE, 15L);
-	curl_easy_setopt(curl, CURLOPT_TCP_KEEPINTVL, 15L);
+	curl_easy_setopt(curl, CURLOPT_TCP_KEEPIDLE, 30L);
+	curl_easy_setopt(curl, CURLOPT_TCP_KEEPINTVL, 30L);
 	curl_easy_setopt(curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
-	curl_easy_setopt(curl, CURLOPT_TIMEOUT, 600L);
+	curl_easy_setopt(curl, CURLOPT_TIMEOUT, 900L);           // 15 minutes for slow reasoning models
 }
 
 // ============================================================================
