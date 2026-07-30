@@ -186,6 +186,7 @@ namespace ansi {
     const char* const CLEAR_EOS = "\033[J";
 
     // Colors
+    const char* const BLACK   = "\033[30m";
     const char* const RED     = "\033[31m";
     const char* const GREEN   = "\033[32m";
     const char* const YELLOW  = "\033[33m";
@@ -201,6 +202,7 @@ namespace ansi {
     const char* const BRIGHT_YELLOW = "\033[93m";
     const char* const BRIGHT_BLUE   = "\033[94m";
     const char* const BRIGHT_CYAN   = "\033[96m";
+    const char* const BRIGHT_WHITE  = "\033[97m";
 
     // Background
     const char* const BG_RED    = "\033[41m";
@@ -467,30 +469,43 @@ private:
         int title_pad = (max_w - (int)title.size()) / 2;
         if (title_pad < 1) title_pad = 1;
 
-        emit(buf, row++, 1, std::string(ansi::BG_BLUE) + std::string(ansi::BOLD) + std::string(ansi::WHITE)
+        emit(buf, row++, 1, std::string(ansi::BG_BLUE) + std::string(ansi::BOLD) + std::string(ansi::BRIGHT_WHITE)
             + std::string(max_w, ' ') + ansi::RESET);
-        emit(buf, row++, 1, std::string(ansi::BG_BLUE) + std::string(ansi::BOLD) + std::string(ansi::WHITE)
+        emit(buf, row++, 1, std::string(ansi::BG_BLUE) + std::string(ansi::BOLD) + std::string(ansi::BRIGHT_WHITE)
             + std::string(title_pad, ' ') + title + std::string(max_w - title_pad - (int)title.size(), ' ')
             + ansi::RESET);
-        emit(buf, row++, 1, std::string(ansi::BG_BLUE) + std::string(ansi::BOLD) + std::string(ansi::WHITE)
+        emit(buf, row++, 1, std::string(ansi::BG_BLUE) + std::string(ansi::BOLD) + std::string(ansi::BRIGHT_WHITE)
             + std::string(max_w, ' ') + ansi::RESET);
 
-        // Status bar
-        std::string status_color = ansi::BG_GREEN;
-        std::string status_text = " RUNNING ";
-        std::string uptime_str = " Uptime: " + format_duration(snap.uptime_seconds) + " ";
-        std::string keys_str = " Keys: " + std::to_string(keys.size()) + " ";
-        std::string streams_str = " Streams: " + std::to_string(snap.active_streams) + " ";
-        std::string addr_str = " http://127.0.0.1:8100 ";
-        int status_pad = max_w - 9 - (int)uptime_str.size() - (int)keys_str.size() - (int)streams_str.size() - (int)addr_str.size();
+        // Status bar (high contrast WCAG AAA)
+        std::string uptime_val = format_duration(snap.uptime_seconds);
+        std::string keys_val = std::to_string(keys.size());
+        std::string streams_val = std::to_string(snap.active_streams);
+        std::string addr_val = "http://127.0.0.1:8100";
+
+        int visible_len = 9 /*" RUNNING "*/
+            + 9 /*" Uptime: "*/ + (int)uptime_val.size()
+            + 8 /*"  Keys: "*/ + (int)keys_val.size()
+            + 11 /*"  Streams: "*/ + (int)streams_val.size()
+            + 2 /*"  "*/ + (int)addr_val.size() + 1 /*" "*/;
+        int status_pad = max_w - visible_len;
         if (status_pad < 0) status_pad = 0;
 
-        emit(buf, row++, 1, std::string(status_color) + std::string(ansi::BOLD) + std::string(ansi::WHITE)
-            + status_text + ansi::RESET
-            + std::string(ansi::BG_GRAY) + std::string(ansi::WHITE)
-            + uptime_str + keys_str + streams_str + addr_str
+        std::string status_line = std::string(ansi::BG_GREEN) + std::string(ansi::BOLD) + std::string(ansi::BLACK)
+            + " RUNNING " + ansi::RESET
+            + std::string(ansi::BG_GRAY) + std::string(ansi::BOLD)
+            + std::string(ansi::BRIGHT_WHITE) + " Uptime: "
+            + std::string(ansi::BRIGHT_YELLOW) + uptime_val
+            + std::string(ansi::BRIGHT_WHITE) + "  Keys: "
+            + std::string(ansi::BRIGHT_YELLOW) + keys_val
+            + std::string(ansi::BRIGHT_WHITE) + "  Streams: "
+            + std::string(ansi::BRIGHT_YELLOW) + streams_val
+            + std::string(ansi::BRIGHT_WHITE) + "  "
+            + std::string(ansi::BRIGHT_CYAN) + addr_val
+            + " "
             + std::string(status_pad, ' ')
-            + ansi::RESET);
+            + ansi::RESET;
+        emit(buf, row++, 1, status_line);
         row++;
 
         // Tab bar
