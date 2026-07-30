@@ -417,8 +417,22 @@ private:
     std::deque<std::string> log_lines;
     static constexpr size_t MAX_LOG_LINES = 200;
 
-    int selected_tab = 0;  // 0=overview, 1=keys, 2=logs
+    int selected_tab = 0;  // 0=overview, 1=keys, 2=logs, 3=providers
     int current_max_w = 80;
+
+    // Providers tab state (simulated multi-provider management)
+    struct ProviderConfig {
+        std::string name;
+        std::string type;       // "nvidia", "openai", "anthropic", "groq", etc.
+        std::string base_url;
+        std::string api_key_masked;
+        bool enabled = true;
+        int priority = 0;
+        std::string status = "ready";  // ready, error, cooldown
+    };
+
+    std::vector<ProviderConfig> providers;
+    int selected_provider_idx = 0;
 
     void add_log_line(const std::string& line) {
         std::string clean;
@@ -434,7 +448,15 @@ private:
 
 public:
     TUIPanel(KeyManager& km, StatsCollector& st, std::atomic<bool>& sd)
-        : key_manager(km), stats(st), shutdown(sd) {}
+        : key_manager(km), stats(st), shutdown(sd) {
+        // Seed initial providers (NVIDIA is primary; others are placeholders/configurable in TUI)
+        providers = {
+            {"NVIDIA NIM", "nvidia", "https://integrate.api.nvidia.com/v1", "...masked", true, 0, "ready"},
+            {"OpenAI", "openai", "https://api.openai.com/v1", "", false, 1, "disabled"},
+            {"Anthropic", "anthropic", "https://api.anthropic.com", "", false, 2, "disabled"},
+            {"Groq", "groq", "https://api.groq.com/openai/v1", "", false, 3, "disabled"},
+        };
+    }
 
     void push_log(const std::string& line) {
         add_log_line(line);
@@ -479,8 +501,49 @@ private:
             if (key == '\t' || key == '1') selected_tab = 0;
             if (key == '2') selected_tab = 1;
             if (key == '3') selected_tab = 2;
-            if (key == 1001) scroll_offset = (std::max)(0, scroll_offset - 1); // UP
-            if (key == 1002) scroll_offset++; // DOWN
+            if (key == '4') selected_tab = 3;
+
+            // Providers tab navigation & actions (only when on tab 3)
+            if (selected_tab == 3) {
+                if (key == 1001) { // UP
+                    selected_provider_idx = (std::max)(0, selected_provider_idx - 1);
+                }
+                if (key == 1002) { // DOWN
+                    selected_provider_idx = (std::min)((int)providers.size() - 1, selected_provider_idx + 1);
+                }
+                if (key == 'e' || key == 'E') {
+                    if (!providers.empty() && selected_provider_idx < (int)providers.size()) {
+                        providers[selected_provider_idx].enabled = !providers[selected_provider_idx].enabled;
+                        providers[selected_provider_idx].status = providers[selected_provider_idx].enabled ? "ready" : "disabled";
+                    }
+                }
+                if (key == 'p' || key == 'P') {
+                    if (!providers.empty() && selected_provider_idx < (int)providers.size()) {
+                        providers[selected_provider_idx].priority = (providers[selected_provider_idx].priority + 1) % 5;
+                    }
+                }
+                if (key == 's' || key == 'S') {
+                    if (!providers.empty() && selected_provider_idx < (int)providers.size()) {
+                        auto& pr = providers[selected_provider_idx];
+                        if (pr.status == "ready") pr.status = "cooldown";
+                        else if (pr.status == "cooldown") pr.status = "error";
+                        else pr.status = "ready";
+                    }
+                }
+                if (key == 'r' || key == 'R') {
+                    if (!providers.empty() && selected_provider_idx < (int)providers.size()) {
+                        auto& pr = providers[selected_provider_idx];
+                        if (pr.name == "NVIDIA NIM") {
+                            pr.enabled = true; pr.priority = 0; pr.status = "ready";
+                        } else {
+                            pr.enabled = false; pr.priority = selected_provider_idx; pr.status = "disabled";
+                        }
+                    }
+                }
+            } else {
+                if (key == 1001) scroll_offset = (std::max)(0, scroll_offset - 1); // UP
+                if (key == 1002) scroll_offset++; // DOWN
+            }
 
             render();
             std::this_thread::sleep_for(std::chrono::milliseconds(150));
@@ -565,9 +628,9 @@ private:
         emit(buf, row++, 1, "");
 
         // Tab bar
-        const char* tab_names[] = {"[1] Overview", "[2] Keys", "[3] Logs"};
+        const char* tab_names[] = {"[1] Overview", "[2] Keys", "[3] Logs", "[4] Providers"};
         std::string tabs;
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < 4; i++) {
             if (i == selected_tab) {
                 tabs += std::string(ansi::BOLD) + std::string(ansi::BG_CYAN) + std::string(ansi::WHITE) + " " + tab_names[i] + " " + ansi::RESET + " ";
             } else {
@@ -577,6 +640,8 @@ private:
         std::string controls = "  [Tab] switch  [q] quit";
         if (selected_tab == 2) {
             controls += "  [Up/Down] scroll";
+        } else if (selected_tab == 3) {
+            controls += "  [Up/Down] select  [E]nable  [P]riority  [S]tatus  [R]eset";
         }
         tabs += std::string(ansi::DIM) + controls + ansi::RESET;
         emit(buf, row++, 1, tabs);
@@ -590,8 +655,10 @@ private:
             row = render_overview(buf, row, max_w, max_h, snap, keys);
         } else if (selected_tab == 1) {
             row = render_keys_detail(buf, row, max_w, max_h, snap, keys);
-        } else {
+        } else if (selected_tab == 2) {
             row = render_logs(buf, row, max_w, max_h);
+        } else if (selected_tab == 3) {
+            row = render_providers(buf, row, max_w, max_h);
         }
 
         for (int r = row; r <= max_h; r++) {
@@ -797,6 +864,85 @@ private:
 
         if (logs.empty() && row < max_h) {
             emit(buf, row++, 1, std::string(ansi::DIM) + "  No log entries yet..." + ansi::RESET);
+        }
+
+        return row;
+    }
+
+    int render_providers(std::string& buf, int row, int max_w, int max_h) {
+        if (row < max_h) {
+            emit(buf, row++, 1, std::string(ansi::BOLD) + std::string(ansi::BRIGHT_GREEN)
+                + ">> AI Providers (multi-backend configuration)" + ansi::RESET);
+            emit(buf, row++, 1, std::string(ansi::DIM) + "   Select provider and toggle/configure routing priority" + ansi::RESET);
+            emit(buf, row++, 1, "");
+        }
+
+        // Header
+        std::string hdr = "  " + pad_right("Provider", 18) + " "
+            + pad_right("Type", 12) + " "
+            + pad_right("Base URL", 28) + " "
+            + pad_left("Enabled", 9) + " "
+            + pad_left("Pri", 4) + " "
+            + pad_left("Status", 10);
+        if (row < max_h) {
+            emit(buf, row++, 1, std::string(ansi::DIM) + hdr + ansi::RESET);
+            emit(buf, row++, 1, std::string(ansi::DIM) + std::string(max_w - 2, '-') + ansi::RESET);
+        }
+
+        for (size_t i = 0; i < providers.size(); ++i) {
+            if (row >= max_h - 1) break;
+
+            const auto& p = providers[i];
+            bool is_selected = ((int)i == selected_provider_idx);
+
+            std::string sel_prefix = is_selected ? std::string(ansi::BG_CYAN) + std::string(ansi::BLACK) + "> " + ansi::RESET : "  ";
+
+            std::string en_badge = p.enabled ?
+                (std::string(ansi::BG_GREEN) + std::string(ansi::WHITE) + "  ON  " + ansi::RESET) :
+                (std::string(ansi::BG_GRAY)  + std::string(ansi::WHITE) + " OFF  " + ansi::RESET);
+
+            std::string st_color;
+            if (p.status == "ready") st_color = ansi::BRIGHT_GREEN;
+            else if (p.status == "cooldown") st_color = ansi::YELLOW;
+            else if (p.status == "error") st_color = ansi::BRIGHT_RED;
+            else st_color = ansi::DIM;
+
+            std::string url_short = truncate(p.base_url, 27);
+
+            std::string line = sel_prefix
+                + pad_right(p.name, 18) + " "
+                + pad_right(p.type, 12) + " "
+                + pad_right(url_short, 28) + " "
+                + en_badge + " "
+                + pad_left(std::to_string(p.priority), 4) + " "
+                + st_color + pad_left(p.status, 10) + ansi::RESET;
+
+            emit(buf, row++, 1, line);
+        }
+
+        emit(buf, row++, 1, "");
+
+        // Selected provider details + help
+        if (!providers.empty() && selected_provider_idx < (int)providers.size() && row < max_h) {
+            const auto& p = providers[selected_provider_idx];
+
+            emit(buf, row++, 1, std::string(ansi::BOLD) + "  Selected: " + ansi::RESET
+                + std::string(ansi::BRIGHT_CYAN) + p.name + ansi::RESET
+                + "  (" + p.type + ")");
+
+            std::string api_key_display = p.api_key_masked.empty() ? "<not set>" : p.api_key_masked;
+            emit(buf, row++, 1, std::string(ansi::DIM) + "    Base URL: " + ansi::RESET + p.base_url);
+            emit(buf, row++, 1, std::string(ansi::DIM) + "    API Key:  " + ansi::RESET + api_key_display);
+            emit(buf, row++, 1, std::string(ansi::DIM) + "    Priority: " + ansi::RESET + std::to_string(p.priority)
+                + "   (lower = higher precedence when routing)");
+
+            emit(buf, row++, 1, "");
+        }
+
+        if (row < max_h) {
+            emit(buf, row++, 1, std::string(ansi::DIM) + "  Legend: " + ansi::RESET
+                + "[E] Toggle enabled   [P] Cycle priority   [S] Cycle status   [R] Reset to defaults");
+            emit(buf, row++, 1, std::string(ansi::DIM) + "  Note: This TUI simulates provider config. Real multi-provider routing is not yet wired into backend." + ansi::RESET);
         }
 
         return row;

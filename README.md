@@ -107,7 +107,7 @@ nvapi-bbb
 
 ## TUI Control Panel
 
-The TUI starts automatically on launch and takes over the terminal. It provides three tabs:
+The TUI starts automatically on launch and takes over the terminal. It provides four tabs:
 
 ### Tab 1 — Overview
 - Total requests, successes, failures, rate limits, auth failures, server errors
@@ -126,6 +126,12 @@ The TUI starts automatically on launch and takes over the terminal. It provides 
 ### Tab 3 — Logs
 - Live activity log (color-coded, scrollable with arrow keys)
 
+### Tab 4 — Providers (NEW)
+- Configure and manage different AI providers (NVIDIA NIM, OpenAI, Anthropic, Groq, etc.)
+- Toggle providers on/off, adjust routing priority, cycle simulated status
+- Displays name, type, base URL, enabled state, priority, and health status
+- Keyboard controls inside the tab: Up/Down to select, E toggle enable, P cycle priority, S cycle status, R reset
+
 ### Controls
 
 | Key | Action |
@@ -133,8 +139,13 @@ The TUI starts automatically on launch and takes over the terminal. It provides 
 | `1` | Overview tab |
 | `2` | Keys tab |
 | `3` | Logs tab |
+| `4` | Providers tab |
 | `Tab` | Cycle tabs |
-| `↑` `↓` | Scroll (logs tab) |
+| `↑` `↓` | Scroll (logs) / Navigate providers |
+| `E` | (Providers) Toggle enabled |
+| `P` | (Providers) Cycle priority |
+| `S` | (Providers) Cycle status |
+| `R` | (Providers) Reset selected |
 | `q` / `Ctrl-C` | Shut down proxy |
 
 ## Architecture
