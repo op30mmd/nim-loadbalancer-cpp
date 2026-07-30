@@ -1,0 +1,55 @@
+# Build output
+build/
+x64/
+x86/
+out/
+cmake-build-*/
+*.exe
+*.dll
+*.lib
+*.obj
+*.pdb
+*.ilk
+*.exp
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
+
+# vcpkg
+vcpkg_installed/
+
+# Visual Studio
+*.vcxproj.user
+*.sln.docstates
+.vs/
+*.suo
+*.ncb
+*.sdf
+*.opensdf
+*.VC.db
+*.VC.VC.opendb
+.idea/
+*.VC.db
+
+# Logs
+*.log
+
+# API keys / secrets
+*.env
+.env
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Compiled files
+*.o
+*.a
+*.so
+*.dylib
