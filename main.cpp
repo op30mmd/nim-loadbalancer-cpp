@@ -535,7 +535,6 @@ int main() {
 				LOG_ERROR("AnthropicAPI", "Failed converting OpenAI payload to Anthropic format.");
 				res.status = 500;
 				res.set_content(make_anthropic_error("api_error", "Failed to transform response").dump(), "application/json");
-			}
 		}
 		return;
 	}
@@ -783,4 +782,4 @@ int main() {
 	g_logger.set_tui_mode(false);
 	curl_global_cleanup();
 	return 0;
-
+}
