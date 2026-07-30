@@ -74,11 +74,13 @@ inline void disable_raw_mode() {
     if (raw_mode_active) {
         tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios);
         raw_mode_active = false;
+        setvbuf(stdout, nullptr, _IOLBF, 1024);
     }
 }
 
 inline void enable_raw_mode() {
     if (!raw_mode_active) {
+        setvbuf(stdout, nullptr, _IOFBF, 65536);
         tcgetattr(STDIN_FILENO, &orig_termios);
         atexit(disable_raw_mode);
         struct termios raw = orig_termios;
@@ -114,6 +116,7 @@ inline int read_key() {
 }
 #else
 inline void enable_raw_mode() {
+    setvbuf(stdout, nullptr, _IOFBF, 65536);
     HANDLE h = GetStdHandle(STD_INPUT_HANDLE);
     DWORD mode;
     GetConsoleMode(h, &mode);
@@ -127,6 +130,11 @@ inline void enable_raw_mode() {
     out_mode &= ~0x0002; // Disable ENABLE_WRAP_AT_EOL_OUTPUT to prevent auto-wrap scrolling
     SetConsoleMode(out, out_mode);
     SetConsoleOutputCP(CP_UTF8);
+    CONSOLE_CURSOR_INFO cci;
+    if (GetConsoleCursorInfo(out, &cci)) {
+        cci.bVisible = FALSE;
+        SetConsoleCursorInfo(out, &cci);
+    }
 }
 
 inline void disable_raw_mode() {
@@ -135,6 +143,13 @@ inline void disable_raw_mode() {
     GetConsoleMode(h, &mode);
     mode |= (ENABLE_ECHO_INPUT | ENABLE_LINE_INPUT | ENABLE_PROCESSED_INPUT | 0x0010);
     SetConsoleMode(h, mode);
+    HANDLE out = GetStdHandle(STD_OUTPUT_HANDLE);
+    CONSOLE_CURSOR_INFO cci;
+    if (GetConsoleCursorInfo(out, &cci)) {
+        cci.bVisible = TRUE;
+        SetConsoleCursorInfo(out, &cci);
+    }
+    setvbuf(stdout, nullptr, _IOLBF, 1024);
 }
 
 inline int read_key() {
@@ -625,7 +640,8 @@ private:
         if (row < max_h) {
             emit(buf, row++, 1, std::string(ansi::DIM) + " Throughput: " + ansi::RESET
                 + sparkline(snap.throughput_series, tp_w, ansi::BRIGHT_CYAN)
-                + std::string(ansi::DIM) + "   Errors: " + ansi::RESET
+                + " "
+                + std::string(ansi::DIM) + "  Errors: " + ansi::RESET
                 + sparkline(snap.error_rate_series, err_w, ansi::BRIGHT_RED));
         }
 

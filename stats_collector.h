@@ -221,10 +221,19 @@ public:
             s.p99_latency_ms = percentile(latencies, 0.99);
         }
 
-        // Copy time series
+        // Copy time series and include live current bucket to prevent sparkline edge flicker
         s.throughput_series.assign(throughput_raw.begin(), throughput_raw.end());
+        auto now_ts = std::chrono::steady_clock::now();
+        if (!s.throughput_series.empty() || bucket_requests > 0) {
+            s.throughput_series.push_back({now_ts, (double)bucket_requests});
+            while (s.throughput_series.size() > MAX_SERIES) s.throughput_series.erase(s.throughput_series.begin());
+        }
         s.latency_series.assign(latency_raw.begin(), latency_raw.end());
         s.error_rate_series.assign(error_raw.begin(), error_raw.end());
+        if (!s.error_rate_series.empty() || bucket_errors > 0) {
+            s.error_rate_series.push_back({now_ts, (double)bucket_errors});
+            while (s.error_rate_series.size() > MAX_SERIES) s.error_rate_series.erase(s.error_rate_series.begin());
+        }
 
         // Recent requests (already newest-first)
         s.recent_requests.assign(recent.begin(), recent.end());
