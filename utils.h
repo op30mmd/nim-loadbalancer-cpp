@@ -26,3 +26,4 @@ int get_model_context_window(const std::string& model_id);
 // ============================================================================
 
 std::vector<std::string> load_api_keys();
+std::vector<std::string> load_provider_keys(const std::string& type, const std::vector<std::string>& fallback_keys);

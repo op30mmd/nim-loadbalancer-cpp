@@ -23,6 +23,11 @@ target_include_directories(nim-balancer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/incl
 target_include_directories(nim-balancer PRIVATE $<TARGET_PROPERTY:CURL::libcurl_static,INCLUDE_DIRECTORIES)
 target_link_libraries(nim-balancer PRIVATE Threads::Threads CURL::libcurl)
 
+# MSVC-specific: enable UTF-8 source and execution charset
+if(MSVC)
+    target_compile_options(nim-balancer PRIVATE "/utf-8")
+endif()
+
 # Native MSVC Library attachments for Windows socket operations
 if(WIN32)
     target_link_libraries(nim-balancer PRIVATE ws2_32 crypt32 bcrypt)
