@@ -17,11 +17,8 @@ CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
 Makefile
-*.cmake
 !CMakeLists.txt
 
-# vcpkg
-vcpkg_installed/
 
 # Visual Studio
 *.vcxproj.user
