@@ -70,12 +70,46 @@ public:
                        const std::vector<std::string>& fallback_keys = {},
                        int cooldown = 60, int max_cooldown = 1800) {
         std::lock_guard<std::mutex> lock(mtx);
-        providers.clear();
 
+        // Update existing providers in-place (preserves KeyManagers / backoff state).
+        // Only structural fields (enabled, priority, base_url, status) are changed;
+        // KeyManagers and their cooldown data are never rebuilt on a TUI sync.
+        for (auto& bp : providers) {
+            for (const auto& up : ui_providers) {
+                if (up.name == bp.name) {
+                    bp.enabled = up.enabled;
+                    bp.priority = up.priority;
+                    bp.status = up.status;
+                    if (!up.base_url.empty()) bp.base_url = up.base_url;
+                    break;
+                }
+            }
+        }
+
+        // Remove any providers that no longer exist in the TUI list (keep only those
+        // whose name matches at least one TUI entry, plus NVIDIA NIM which is always
+        // kept if present since it's the primary backend).
+        providers.erase(
+            std::remove_if(providers.begin(), providers.end(), [&](const BackendProvider& bp) {
+                for (const auto& up : ui_providers) {
+                    if (up.name == bp.name) return false;
+                }
+                // Keep NVIDIA NIM even if TUI list doesn't mention it
+                return bp.name.find("NVIDIA") == std::string::npos;
+            }),
+            providers.end()
+        );
+
+        // Add any new TUI providers that don't already exist in the pool.
+        // Only NVIDIA NIM gets keys (it's the only one with real API keys).
         std::vector<std::string> keys_to_use = fallback_keys.empty() ? master_keys : fallback_keys;
-
         for (const auto& up : ui_providers) {
             if (!up.enabled) continue;
+            bool exists = false;
+            for (const auto& bp : providers) {
+                if (bp.name == up.name) { exists = true; break; }
+            }
+            if (exists) continue;
 
             BackendProvider bp;
             bp.name = up.name;
@@ -85,20 +119,10 @@ public:
             bp.priority = up.priority;
             bp.status = up.status;
 
-            if (!keys_to_use.empty()) {
+            // Only NVIDIA-type providers receive API keys
+            if (bp.type == "nvidia" && !keys_to_use.empty()) {
                 bp.key_manager = std::make_unique<KeyManager>(keys_to_use, cooldown, max_cooldown);
             }
-            providers.push_back(std::move(bp));
-        }
-
-        if (providers.empty() && !keys_to_use.empty()) {
-            BackendProvider bp;
-            bp.name = "NVIDIA NIM (fallback)";
-            bp.type = "nvidia";
-            bp.base_url = "https://integrate.api.nvidia.com/v1";
-            bp.enabled = true;
-            bp.priority = 999;
-            bp.key_manager = std::make_unique<KeyManager>(keys_to_use, cooldown, max_cooldown);
             providers.push_back(std::move(bp));
         }
     }
@@ -134,19 +158,11 @@ public:
                 }
             }
         }
-        for (auto* prov : active) {
-            if (prov->key_manager) {
-                std::string k = prov->key_manager->get_key();
-                if (!k.empty()) {
-                    prov->last_used = std::chrono::steady_clock::now();
-                    return {prov, k};
-                }
-            }
-        }
         return {nullptr, ""};
     }
 
     void mark_provider_success(BackendProvider* prov, const std::string& key) {
+        std::lock_guard<std::mutex> lock(mtx);
         if (prov && prov->key_manager) {
             prov->key_manager->mark_success(key);
             prov->status = "ready";
@@ -154,10 +170,10 @@ public:
     }
 
     void mark_provider_failed(BackendProvider* prov, const std::string& key, int status_code) {
+        std::lock_guard<std::mutex> lock(mtx);
         if (!prov || !prov->key_manager) return;
         prov->key_manager->mark_failed(key, status_code);
         if (status_code == 401 || status_code == 403) prov->status = "error";
-        else if (status_code == 429) prov->status = "cooldown";
         else prov->status = "cooldown";
     }
 

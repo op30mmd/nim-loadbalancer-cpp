@@ -29,6 +29,11 @@ endif()
 # Define Executable
 add_executable(nim-balancer main.cpp utils.cpp anthropic_handler.cpp)
 
+# MSVC-specific: enable UTF-8 source and execution charset
+if(MSVC)
+    target_compile_options(nim-balancer PRIVATE "/utf-8")
+endif()
+
 # Link core dependencies (Pthread is automatically attached to Linux targets here)
 target_link_libraries(nim-balancer PRIVATE Threads::Threads CURL::libcurl)
 

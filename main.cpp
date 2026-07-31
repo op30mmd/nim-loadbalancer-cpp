@@ -54,6 +54,11 @@
 
 Logger g_logger;
 
+// Global flag to abort in-flight streaming content providers on shutdown.
+// Checked inside the set_chunked_content_provider lambdas so workers exit
+// their chunk loop promptly instead of waiting out the 900s write timeout.
+static std::atomic<bool> g_streaming_shutdown{false};
+
 int main() {
 	g_logger.init(LogLevel::LEVEL_DEBUG, "proxy.log");
 	curl_global_init(CURL_GLOBAL_ALL);
@@ -100,16 +105,27 @@ int main() {
 
 	// --- Statistics & TUI ---
 	StatsCollector g_stats;
-	TUIPanel g_tui(key_manager, g_stats, shutdown, &g_provider_manager);
+	TUIPanel g_tui(key_manager, g_stats, shutdown, &g_provider_manager, key_cooldown, key_max_cooldown);
 	g_logger.set_tui_mode(true, [&g_tui](const std::string& line) { g_tui.push_log(line); });
-	g_tui.start();
 
+	// Only start the TUI if stdout is a real console (not a pipe/redirect/service)
+#ifdef _WIN32
+	HANDLE h_out = GetStdHandle(STD_OUTPUT_HANDLE);
+	DWORD mode_check;
+	bool is_console = GetConsoleMode(h_out, &mode_check) != 0;
+#else
+	bool is_console = isatty(fileno(stdout)) != 0;
+#endif
 
 	httplib::Server svr;
-	g_tui.set_stop_callback([&svr]() { svr.stop(); });
+	g_tui.set_stop_callback([&svr]() {
+		g_streaming_shutdown.store(true);
+		svr.stop();
+	});
+	if (is_console) g_tui.start();
 
 	svr.set_read_timeout(600, 0);
-	svr.set_write_timeout(900, 0);
+	svr.set_write_timeout(30, 0);
 
 	// --- GLOBAL CORS MIDDLEWARE & OPTIONS PREFLIGHT HANDLER ---
 	svr.set_pre_routing_handler([](const httplib::Request& req, httplib::Response& res) {
@@ -485,6 +501,7 @@ int main() {
 						LOG_WARN("Stream", "Downstream client aborted connection mid-stream.");
 						return false;
 					}
+					if (g_streaming_shutdown.load()) return false;
 
 					std::string chunk;
 					if (lstate->ctx->chunk_queue.pop_timeout(chunk, std::chrono::seconds(5))) {
@@ -544,10 +561,9 @@ int main() {
 			}
 		}
 		return;
-	}
-};
+	};
 
-svr.Post("/v1/messages", handle_anthropic_messages);
+	svr.Post("/v1/messages", handle_anthropic_messages);
 svr.Post("/messages", handle_anthropic_messages);
 
 // --- GENERIC OPENAI WILDCARD ROUTE HANDLER ---
@@ -711,6 +727,7 @@ auto handle_openai_proxy = [&](const httplib::Request& req, httplib::Response& r
 						LOG_WARN("Stream", "Downstream client aborted connection mid-stream.");
 						return false;
 					}
+					if (g_streaming_shutdown.load()) return false;
 
 					std::string chunk;
 					if (lstate->ctx->chunk_queue.pop_timeout(chunk, std::chrono::seconds(5))) {
@@ -785,8 +802,9 @@ auto handle_openai_proxy = [&](const httplib::Request& req, httplib::Response& r
 	svr.listen("127.0.0.1", 8100);
 
 	shutdown.store(true);
-	g_tui.stop();
+	if (is_console) g_tui.stop();
 	g_logger.set_tui_mode(false);
 	curl_global_cleanup();
 	return 0;
+}
 
