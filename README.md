@@ -184,7 +184,7 @@ Client (Anthropic/OpenAI protocol)
 | Dependency | Version | Location |
 |------------|---------|----------|
 | libcurl | 8.21.0 | `thirdparty/curl` (git submodule) |
-| nlohmann/json | 3.12.0 | `include/json.hpp` (single header) |
+| nlohmann/json | 3.12.0 | `include/nlohmann/json.hpp` (single header) |
 | cpp-httplib | 0.51.0 | `include/httplib.h` (single header) |
 
 All dependencies are bundled in the repository — no external package manager required.
