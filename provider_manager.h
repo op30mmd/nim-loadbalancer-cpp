@@ -10,6 +10,7 @@
 
 #include "key_manager.h"
 #include "logger.h"
+#include "utils.h"
 
 // This struct MUST be defined before ProviderManager uses it.
 struct TUIBackendProvider {
@@ -53,17 +54,42 @@ public:
         this->max_cooldown = max_cooldown;
         providers.clear();
 
-        BackendProvider p;
-        p.name = "NVIDIA NIM";
-        p.type = "nvidia";
-        p.base_url = "https://integrate.api.nvidia.com/v1";
-        p.enabled = true;
-        p.priority = 0;
-        p.status = "ready";
-        if (!keys.empty()) {
-            p.key_manager = std::make_unique<KeyManager>(keys, cooldown, max_cooldown);
+        struct DefaultProviderSpec {
+            std::string name;
+            std::string type;
+            std::string base_url;
+            int priority;
+        };
+
+        std::vector<DefaultProviderSpec> specs = {
+            {"NVIDIA NIM", "nvidia", "https://integrate.api.nvidia.com/v1", 0},
+            {"OpenAI", "openai", "https://api.openai.com/v1", 1},
+            {"Anthropic", "anthropic", "https://api.anthropic.com/v1", 1},
+            {"Google Gemini", "google", "https://generativelanguage.googleapis.com/v1beta", 2},
+            {"Groq", "groq", "https://api.groq.com/openai/v1", 2},
+            {"DeepSeek", "deepseek", "https://api.deepseek.com", 2},
+            {"Mistral AI", "mistral", "https://api.mistral.ai/v1", 3},
+            {"Together AI", "together", "https://api.together.xyz/v1", 3},
+            {"Cohere", "cohere", "https://api.cohere.com/v1", 3},
+            {"OpenRouter", "openrouter", "https://openrouter.ai/api/v1", 3},
+            {"Ollama", "ollama", "http://localhost:11434/v1", 4}
+        };
+
+        for (const auto& s : specs) {
+            BackendProvider p;
+            p.name = s.name;
+            p.type = s.type;
+            p.base_url = s.base_url;
+            p.enabled = true;
+            p.priority = s.priority;
+            p.status = "ready";
+
+            auto p_keys = load_provider_keys(p.type, keys);
+            if (!p_keys.empty()) {
+                p.key_manager = std::make_unique<KeyManager>(p_keys, cooldown, max_cooldown);
+            }
+            providers.push_back(std::move(p));
         }
-        providers.push_back(std::move(p));
     }
 
     void set_providers(const std::vector<TUIBackendProvider>& ui_providers,
@@ -119,9 +145,9 @@ public:
             bp.priority = up.priority;
             bp.status = up.status;
 
-            // Only NVIDIA-type providers receive API keys
-            if (bp.type == "nvidia" && !keys_to_use.empty()) {
-                bp.key_manager = std::make_unique<KeyManager>(keys_to_use, cooldown, max_cooldown);
+            auto p_keys = load_provider_keys(bp.type, keys_to_use);
+            if (!p_keys.empty()) {
+                bp.key_manager = std::make_unique<KeyManager>(p_keys, cooldown, max_cooldown);
             }
             providers.push_back(std::move(bp));
         }
@@ -185,6 +211,7 @@ public:
         int priority;
         std::string status;
         size_t key_count = 0;
+        std::string api_key_masked;
     };
 
     std::vector<ProviderSnapshot> snapshot() const {
@@ -198,7 +225,16 @@ public:
             s.enabled = p.enabled;
             s.priority = p.priority;
             s.status = p.status;
-            if (p.key_manager) s.key_count = p.key_manager->get_keys_count();
+            if (p.key_manager) {
+                s.key_count = p.key_manager->get_keys_count();
+                auto km_snap = p.key_manager->snapshot();
+                if (!km_snap.empty()) {
+                    s.api_key_masked = km_snap[0].masked;
+                    if (km_snap.size() > 1) {
+                        s.api_key_masked += " (+" + std::to_string(km_snap.size() - 1) + " more)";
+                    }
+                }
+            }
             out.push_back(std::move(s));
         }
         return out;

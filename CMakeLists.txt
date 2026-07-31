@@ -49,6 +49,10 @@ if(TARGET httplib::httplib)
     target_link_libraries(nim-balancer PRIVATE httplib::httplib)
 elseif(HTTPLIB_INCLUDE_DIR)
     target_include_directories(nim-balancer PRIVATE ${HTTPLIB_INCLUDE_DIR})
+    find_library(CPPHTTPLIB_LIBRARY NAMES cpp-httplib)
+    if(CPPHTTPLIB_LIBRARY)
+        target_link_libraries(nim-balancer PRIVATE ${CPPHTTPLIB_LIBRARY})
+    endif()
 endif()
 
 # Native MSVC Library attachments for Windows socket operations

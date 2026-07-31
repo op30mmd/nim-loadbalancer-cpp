@@ -271,3 +271,71 @@ std::vector<std::string> load_api_keys() {
 
 	return keys;
 }
+
+std::vector<std::string> load_provider_keys(const std::string& type, const std::vector<std::string>& fallback_keys) {
+	std::vector<std::string> keys;
+	std::string env_var_name;
+	std::string dummy_val;
+	if (type == "nvidia") {
+		env_var_name = "NVIDIA_API_KEY";
+		dummy_val = "nvapi-dummy";
+	} else if (type == "openai") {
+		env_var_name = "OPENAI_API_KEY";
+		dummy_val = "sk-openai-dummy";
+	} else if (type == "anthropic") {
+		env_var_name = "ANTHROPIC_API_KEY";
+		dummy_val = "sk-ant-dummy";
+	} else if (type == "google") {
+		env_var_name = "GEMINI_API_KEY";
+		if (!std::getenv(env_var_name.c_str())) {
+			env_var_name = "GOOGLE_API_KEY";
+		}
+		dummy_val = "sk-gemini-dummy";
+	} else if (type == "groq") {
+		env_var_name = "GROQ_API_KEY";
+		dummy_val = "gsk-groq-dummy";
+	} else if (type == "deepseek") {
+		env_var_name = "DEEPSEEK_API_KEY";
+		dummy_val = "sk-deepseek-dummy";
+	} else if (type == "mistral") {
+		env_var_name = "MISTRAL_API_KEY";
+		dummy_val = "sk-mistral-dummy";
+	} else if (type == "together") {
+		env_var_name = "TOGETHER_API_KEY";
+		dummy_val = "sk-together-dummy";
+	} else if (type == "cohere") {
+		env_var_name = "COHERE_API_KEY";
+		dummy_val = "sk-cohere-dummy";
+	} else if (type == "openrouter") {
+		env_var_name = "OPENROUTER_API_KEY";
+		dummy_val = "sk-openrouter-dummy";
+	} else if (type == "ollama") {
+		// Ollama doesn't need authorization, but let's give it a dummy key so it is not skipped.
+		keys.push_back("ollama-no-key-required");
+		return keys;
+	}
+
+	if (!env_var_name.empty()) {
+		const char* env_keys = std::getenv(env_var_name.c_str());
+		if (env_keys && env_keys[0] != '\0') {
+			std::string s(env_keys);
+			std::stringstream ss(s);
+			std::string key;
+			while (std::getline(ss, key, ',')) {
+				key.erase(0, key.find_first_not_of(" \t\r\n"));
+				key.erase(key.find_last_not_of(" \t\r\n") + 1);
+				if (!key.empty()) keys.push_back(key);
+			}
+		}
+	}
+
+	if (keys.empty()) {
+		// Fallback to type-specific master key logic or dummy key
+		if (type == "nvidia" && !fallback_keys.empty()) {
+			return fallback_keys;
+		}
+		// If still empty, use a dummy key so the provider is ready/wired up in the UI
+		keys.push_back(dummy_val);
+	}
+	return keys;
+}
