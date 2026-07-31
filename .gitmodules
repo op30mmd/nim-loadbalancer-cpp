@@ -1,0 +1,4 @@
+[submodule "thirdparty/curl"]
+	path = thirdparty/curl
+	url = https://github.com/curl/curl.git
+	branch = curl-8_21_0
