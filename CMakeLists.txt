@@ -29,6 +29,11 @@ endif()
 # Define Executable
 add_executable(nim-balancer main.cpp utils.cpp anthropic_handler.cpp)
 
+# MSVC-specific: enable UTF-8 source and execution charset
+if(MSVC)
+    target_compile_options(nim-balancer PRIVATE "/utf-8")
+endif()
+
 # Link core dependencies (Pthread is automatically attached to Linux targets here)
 target_link_libraries(nim-balancer PRIVATE Threads::Threads CURL::libcurl)
 
@@ -44,6 +49,10 @@ if(TARGET httplib::httplib)
     target_link_libraries(nim-balancer PRIVATE httplib::httplib)
 elseif(HTTPLIB_INCLUDE_DIR)
     target_include_directories(nim-balancer PRIVATE ${HTTPLIB_INCLUDE_DIR})
+    find_library(CPPHTTPLIB_LIBRARY NAMES cpp-httplib)
+    if(CPPHTTPLIB_LIBRARY)
+        target_link_libraries(nim-balancer PRIVATE ${CPPHTTPLIB_LIBRARY})
+    endif()
 endif()
 
 # Native MSVC Library attachments for Windows socket operations
