@@ -35,35 +35,29 @@ All `/v1/*` routes also accept bare paths (`/messages`, `/models`).
 
 - C++17 compiler (GCC 8+, Clang 7+, MSVC 2019+)
 - CMake 3.15+
-- libcurl
-- [nlohmann/json](https://github.com/nlohmann/json) (header-only)
-- [cpp-httplib](https://github.com/yhirose/cpp-httplib) (header-only)
+- On Linux: OpenSSL development headers (`libssl-dev` on Debian/Ubuntu)
+- On Windows: No additional dependencies (uses Schannel)
 
-### With vcpkg
-
-```bash
-vcpkg install curl nlohmann-json cpp-httplib
-cmake -B build -DCMAKE_TOOLCHAIN_FILE=<vcpkg-root>/scripts/buildsystems/vcpkg.cmake
-cmake --build build
-```
-
-### With system packages
+### Building with CMake
 
 ```bash
-# Debian/Ubuntu
-apt install libcurl4-openssl-dev nlohmann-json3-dev
+# Clone with submodules
+git clone --recurse-submodules --shallow-submodules https://github.com/your-repo/nim-loadbalancer-cpp.git
+cd nim-loadbalancer-cpp
 
-# cpp-httplib (header-only, drop httplib.h in project root or install via package manager)
+# Or if already cloned without submodules:
+# git submodule update --init --recursive --depth 1
 
+# Configure and build
 cmake -B build
-cmake --build build
+cmake --build build --config Release
 ```
 
-### Windows (Visual Studio)
+The binary is produced as `build/nim-balancer` (or `build/Release/nim-balancer.exe` on Windows).
 
-Open `nim-proxy-cpp.vcxproj` directly, or use the CMake project with vcpkg.
+### Visual Studio
 
-The binary is produced as `build/nim-balancer`.
+Open the generated `build/NvidiaNimProxy.sln` in Visual Studio 2019+, or use the CMake integration directly in VS.
 
 ## Configuration
 
@@ -184,6 +178,16 @@ Client (Anthropic/OpenAI protocol)
 | `logger.h` | Thread-safe logger with file output and TUI callback |
 | `stats_collector.h` | Rolling-window statistics, latency percentiles, time series |
 | `tui_panel.h` | Fullscreen ANSI terminal UI with charts and keybindings |
+
+### Dependencies (Bundled)
+
+| Dependency | Version | Location |
+|------------|---------|----------|
+| libcurl | 8.21.0 | `thirdparty/curl` (git submodule) |
+| nlohmann/json | 3.12.0 | `include/json.hpp` (single header) |
+| cpp-httplib | 0.51.0 | `include/httplib.h` (single header) |
+
+All dependencies are bundled in the repository — no external package manager required.
 
 ## Usage with Clients
 
