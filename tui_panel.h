@@ -489,13 +489,13 @@ public:
         if (provider_manager) {
             auto snap = provider_manager->snapshot();
             for (const auto& s : snap) {
-                providers.push_back({s.name, s.type, s.base_url, "<redacted>",
+                providers.push_back({s.name, s.type, s.base_url, s.api_key_masked.empty() ? "<none>" : s.api_key_masked,
                                      s.enabled, s.priority, s.status});
             }
         }
         if (providers.empty()) {
             providers = {{"NVIDIA NIM", "nvidia", "https://integrate.api.nvidia.com/v1",
-                          "<redacted>", true, 0, "ready"}};
+                          "<none>", true, 0, "ready"}};
         }
 
         // Sync initial state to backend if available
@@ -640,6 +640,23 @@ private:
     }
 
     void render() {
+        // Sync state from provider_manager if available
+        if (provider_manager) {
+            auto live_snap = provider_manager->snapshot();
+            for (auto& p : providers) {
+                for (const auto& s : live_snap) {
+                    if (s.name == p.name) {
+                        p.status = s.status;
+                        p.priority = s.priority;
+                        p.enabled = s.enabled;
+                        p.base_url = s.base_url;
+                        p.api_key_masked = s.api_key_masked.empty() ? "<none>" : s.api_key_masked;
+                        break;
+                    }
+                }
+            }
+        }
+
         int W = term::get_width();
         int H = term::get_height();
         int max_w = (std::max)(10, W - 1);
