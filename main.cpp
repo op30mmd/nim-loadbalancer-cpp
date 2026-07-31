@@ -1,5 +1,31 @@
 #define _CRT_SECURE_NO_WARNINGS
 
+// ======================================================================
+//  THIS PROJECT **REQUIRES** C++17
+// ======================================================================
+// Structured bindings:   auto [prov, key, url] = ...
+// Generic lambdas, etc.
+//
+// IN VISUAL STUDIO (do this after every pull):
+//   1. Right-click the project in Solution Explorer
+//   2. Properties → Configuration: All Configurations | Platform: All Platforms
+//   3. C/C++ → Language → C++ Language Standard
+//      →  "ISO C++17 Standard (/std:c++17)"   or "C++17 (/std:c++17)"
+//   4. Apply → OK
+//   5. Build → Clean Solution
+//   6. Build → Rebuild Solution
+//
+// If you still see "expected a ']'" or "cannot deduce 'auto' type",
+// the compiler is NOT using C++17.
+// ======================================================================
+
+// Compile-time guard (will produce a clear error if not C++17)
+#if __cplusplus < 201703L && !defined(_MSVC_LANG)
+#error "This project requires C++17. Set /std:c++17 (or ISO C++17) in your compiler settings."
+#elif defined(_MSVC_LANG) && _MSVC_LANG < 201703L
+#error "This project requires C++17. Set C++ Language Standard to ISO C++17 Standard (/std:c++17) in Visual Studio project properties."
+#endif
+
 #ifdef _MSC_VER
 #pragma warning(push)
 #pragma warning(disable: 26495)
