@@ -2,3 +2,6 @@
 	path = thirdparty/curl
 	url = https://github.com/curl/curl.git
 	branch = curl-8_21_0
+[submodule "thirdparty/catch2"]
+	path = thirdparty/catch2
+	url = https://github.com/catchorg/Catch2.git

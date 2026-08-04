@@ -22,13 +22,32 @@
 // Constants
 // ============================================================================
 
-const std::string NVIDIA_BASE_URL = []() -> std::string {
-	const char* env_url = std::getenv("NVIDIA_BASE_URL");
-	if (env_url && std::strlen(env_url) > 0) return std::string(env_url);
-	const char* nim_url = std::getenv("NIM_BASE_URL");
-	if (nim_url && std::strlen(nim_url) > 0) return std::string(nim_url);
-	return std::string("https://integrate.api.nvidia.com/v1");
-}();
+// Legacy fallback base URL for the round-robin key pool. Reads
+// NVIDIA_BASE_URL / NIM_BASE_URL at process start, defaulting to the public
+// NIM endpoint. `set_nvidia_base_url_override` is a test seam that lets the
+// in-process test suite redirect the legacy fallback to a mock upstream.
+struct NvidiaBaseUrlState {
+	std::string url = []() -> std::string {
+		const char* env_url = std::getenv("NVIDIA_BASE_URL");
+		if (env_url && std::strlen(env_url) > 0) return std::string(env_url);
+		const char* nim_url = std::getenv("NIM_BASE_URL");
+		if (nim_url && std::strlen(nim_url) > 0) return std::string(nim_url);
+		return std::string("https://integrate.api.nvidia.com/v1");
+	}();
+	std::string override_url;
+};
+
+inline NvidiaBaseUrlState g_nvidia_base_url_state;
+
+inline const std::string& get_nvidia_base_url() {
+	return g_nvidia_base_url_state.override_url.empty()
+		? g_nvidia_base_url_state.url
+		: g_nvidia_base_url_state.override_url;
+}
+
+inline void set_nvidia_base_url_override(const std::string& url) {
+	g_nvidia_base_url_state.override_url = url;
+}
 
 // ============================================================================
 // Thread-Safe Synchronization
