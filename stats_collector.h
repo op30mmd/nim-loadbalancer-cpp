@@ -67,7 +67,7 @@ private:
     // Rolling windows
     static constexpr size_t MAX_RECENT = 100;
     static constexpr size_t MAX_SERIES = 60;  // 60 buckets
-    static constexpr double BUCKET_SIZE_SEC = 5.0;  // 5-second buckets
+    double bucket_size_sec;  // seconds per histogram bucket (default 5.0)
 
     std::deque<RequestRecord> recent;
     std::deque<TimeSeriesPoint> throughput_raw;
@@ -97,7 +97,7 @@ private:
 
     void maybe_flush_bucket() {
         double now_sec = elapsed_sec();
-        if (now_sec - bucket_start_sec >= BUCKET_SIZE_SEC) {
+        if (now_sec - bucket_start_sec >= bucket_size_sec) {
             auto ts = std::chrono::steady_clock::now();
             if (bucket_latency_count > 0) {
                 throughput_raw.push_back({ts, (double)bucket_requests});
@@ -132,7 +132,8 @@ private:
     }
 
 public:
-    StatsCollector() {
+    StatsCollector(double bucket_size_sec = 5.0)
+        : bucket_size_sec(bucket_size_sec) {
         start_time = std::chrono::steady_clock::now();
         bucket_start_sec = 0.0;
     }

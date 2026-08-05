@@ -21,6 +21,10 @@ int estimate_input_tokens(const nlohmann::json& anthropic_json);
 std::string map_anthropic_model_to_nim(const std::string& anthropic_model);
 int get_model_context_window(const std::string& model_id);
 
+// Test seam: clears the one-time NIM_MODEL_MAP cache so tests can re-evaluate
+// the env var (production code never calls this).
+void reset_model_map_env_cache();
+
 // ============================================================================
 // API Key Loading
 // ============================================================================

@@ -32,4 +32,4 @@ else()
 endif()
 
 # Add curl as subdirectory from thirdparty
-add_subdirectory(${CMAKE_SOURCE_DIR}/thirdparty/curl ${CMAKE_CURRENT_BINARY_DIR}/curl)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/curl ${CMAKE_CURRENT_BINARY_DIR}/curl)
