@@ -140,14 +140,14 @@ int main() {
 	// OpenAI proxy, providers) live in ProxyHandlers — see proxy_handlers.cpp.
 	handlers.setup_routes(svr);
 
-	LOG_INFO("Server", "NVIDIA NIM Proxy listening on http://127.0.0.1:8100");
-	LOG_INFO("Server", " - Health Endpoint:    http://127.0.0.1:8100/health");
-	LOG_INFO("Server", " - Keys Endpoint:      http://127.0.0.1:8100/v1/keys");
-	LOG_INFO("Server", " - Models Endpoint:    http://127.0.0.1:8100/v1/models");
-	LOG_INFO("Server", " - OpenAI Endpoint:    http://127.0.0.1:8100/v1/chat/completions");
-	LOG_INFO("Server", " - Anthropic Endpoint: http://127.0.0.1:8100/v1/messages");
+	LOG_INFO("Server", "NVIDIA NIM Proxy listening on http://0.0.0.0:8100");
+	LOG_INFO("Server", " - Health Endpoint:    http://0.0.0.0:8100/health");
+	LOG_INFO("Server", " - Keys Endpoint:      http://0.0.0.0:8100/v1/keys");
+	LOG_INFO("Server", " - Models Endpoint:    http://0.0.0.0:8100/v1/models");
+	LOG_INFO("Server", " - OpenAI Endpoint:    http://0.0.0.0:8100/v1/chat/completions");
+	LOG_INFO("Server", " - Anthropic Endpoint: http://0.0.0.0:8100/v1/messages");
 
-	svr.listen("127.0.0.1", 8100);
+	svr.listen("0.0.0.0", 8100);
 
 	shutdown.store(true);
 	if (is_console) tui.stop();

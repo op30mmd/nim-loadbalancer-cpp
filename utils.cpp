@@ -4,6 +4,8 @@
 #include <unordered_map>
 #include <cstring>
 
+#include <random>
+
 // ============================================================================
 // Config & Path Helpers
 // ============================================================================
@@ -350,4 +352,15 @@ std::vector<std::string> load_provider_keys(const std::string& type, const std::
 		keys.push_back(dummy_val);
 	}
 	return keys;
+}
+
+// ============================================================================
+// Cryptographically Secure-ish Randomness
+// ============================================================================
+
+std::string gen_random_id(const std::string& prefix, int range) {
+	static thread_local std::random_device rd;
+	static thread_local std::mt19937 gen(rd());
+	std::uniform_int_distribution<> dis(0, range - 1);
+	return prefix + std::to_string(dis(gen));
 }

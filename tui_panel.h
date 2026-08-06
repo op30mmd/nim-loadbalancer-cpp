@@ -692,7 +692,7 @@ private:
         std::string uptime_val = format_duration(snap.uptime_seconds);
         std::string keys_val = std::to_string(keys.size());
         std::string streams_val = std::to_string(snap.active_streams);
-        std::string addr_val = "http://127.0.0.1:8100";
+        std::string addr_val = "http://0.0.0.0:8100";
 
         int visible_len = 9 /*" RUNNING "*/
             + 9 /*" Uptime: "*/ + (int)uptime_val.size()
