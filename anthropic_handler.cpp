@@ -1,13 +1,14 @@
 #include "anthropic_handler.h"
 #include <algorithm>
 #include <cstring>
+#include "utils.h"
 
 // ============================================================================
 // Anthropic Compatibility Helpers
 // ============================================================================
 
 std::string gen_request_id() {
-	return "req_" + std::to_string(std::rand() % 100000000);
+	return gen_random_id("req_", 100000000);
 }
 
 nlohmann::json make_anthropic_error(const std::string& type, const std::string& message) {
@@ -210,7 +211,7 @@ std::string process_line_for_anthropic_stream(const std::string& line, Anthropic
 									{"index", state.current_block_index},
 									{"content_block", {
 										{"type", "tool_use"},
-										{"id", "call_" + std::to_string(std::rand() % 100000)},
+										{"id", gen_random_id("call_", 100000)},
 										{"name", "unknown_tool"},
 										{"input", nlohmann::json::object()}
 									}}

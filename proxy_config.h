@@ -22,13 +22,32 @@
 // Constants
 // ============================================================================
 
-const std::string NVIDIA_BASE_URL = []() -> std::string {
-	const char* env_url = std::getenv("NVIDIA_BASE_URL");
-	if (env_url && std::strlen(env_url) > 0) return std::string(env_url);
-	const char* nim_url = std::getenv("NIM_BASE_URL");
-	if (nim_url && std::strlen(nim_url) > 0) return std::string(nim_url);
-	return std::string("https://integrate.api.nvidia.com/v1");
-}();
+// Legacy fallback base URL for the round-robin key pool. Reads
+// NVIDIA_BASE_URL / NIM_BASE_URL at process start, defaulting to the public
+// NIM endpoint. `set_nvidia_base_url_override` is a test seam that lets the
+// in-process test suite redirect the legacy fallback to a mock upstream.
+struct NvidiaBaseUrlState {
+	std::string url = []() -> std::string {
+		const char* env_url = std::getenv("NVIDIA_BASE_URL");
+		if (env_url && std::strlen(env_url) > 0) return std::string(env_url);
+		const char* nim_url = std::getenv("NIM_BASE_URL");
+		if (nim_url && std::strlen(nim_url) > 0) return std::string(nim_url);
+		return std::string("https://integrate.api.nvidia.com/v1");
+	}();
+	std::string override_url;
+};
+
+inline NvidiaBaseUrlState g_nvidia_base_url_state;
+
+inline const std::string& get_nvidia_base_url() {
+	return g_nvidia_base_url_state.override_url.empty()
+		? g_nvidia_base_url_state.url
+		: g_nvidia_base_url_state.override_url;
+}
+
+inline void set_nvidia_base_url_override(const std::string& url) {
+	g_nvidia_base_url_state.override_url = url;
+}
 
 // ============================================================================
 // Thread-Safe Synchronization
@@ -219,69 +238,3 @@ inline void configure_curl_network_stability(CURL* curl) {
 	curl_easy_setopt(curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
 	curl_easy_setopt(curl, CURLOPT_TIMEOUT, 900L);           // 15 minutes for slow reasoning models
 }
-
-// ============================================================================
-// Anthropic Stream State
-// ============================================================================
-
-struct AnthropicStreamState {
-	bool message_started = false;
-	bool text_block_started = false;
-	bool thinking_block_started = false;
-	bool thinking_started = false;
-	bool thinking_finished = false;
-
-	bool tool_block_started = false;
-	std::string current_tool_id = "";
-	std::string current_tool_name = "";
-
-	int current_block_index = -1;
-	std::string msg_id;
-	std::string model = "nvidia-nim-model";
-	int input_tokens = 0;
-	int output_tokens = 0;
-	bool message_stopped = false;
-	std::string finish_reason = "end_turn";
-
-	AnthropicStreamState() {
-		msg_id = "msg_" + std::to_string(std::rand() % 1000000);
-	}
-};
-
-// ============================================================================
-// Lambda State (Streaming)
-// ============================================================================
-
-struct LambdaState {
-	std::string buffer = "";
-	AnthropicStreamState anthropic_state;
-	size_t total_bytes = 0;
-	size_t lines_emitted = 0;
-	std::chrono::steady_clock::time_point stream_start = std::chrono::steady_clock::now();
-	std::shared_ptr<std::thread> curl_thread;
-	std::shared_ptr<ProxyContext> ctx;
-	CURL* curl = nullptr;
-	struct curl_slist* headers_list = nullptr;
-	std::function<void()> on_destroy;
-
-	~LambdaState() {
-		if (ctx) {
-			ctx->client_disconnected = true;
-			ctx->chunk_queue.finish();
-		}
-		if (curl_thread && curl_thread->joinable()) {
-			curl_thread->join();
-		}
-		if (curl) {
-			curl_easy_cleanup(curl);
-		}
-		if (headers_list) {
-			curl_slist_free_all(headers_list);
-		}
-
-		auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-			std::chrono::steady_clock::now() - stream_start).count() / 1000.0;
-		LOG_INFO("Stream", "Session terminated | Duration: " + std::to_string(duration) + "s | Lines: " + std::to_string(lines_emitted) + " | Size: " + std::to_string(total_bytes / 1024.0) + " KB");
-		if (on_destroy) on_destroy();
-	}
-};

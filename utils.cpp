@@ -4,6 +4,8 @@
 #include <unordered_map>
 #include <cstring>
 
+#include <random>
+
 // ============================================================================
 // Config & Path Helpers
 // ============================================================================
@@ -71,26 +73,35 @@ int estimate_input_tokens(const nlohmann::json& anthropic_json) {
 	return static_cast<int>((chars + 3) / 4);
 }
 
+namespace {
+// One-time NIM_MODEL_MAP cache (test seam: reset_model_map_env_cache).
+bool g_model_map_env_loaded = false;
+nlohmann::json g_model_map_env_override;
+}  // namespace
+
+void reset_model_map_env_cache() {
+	g_model_map_env_loaded = false;
+	g_model_map_env_override = nlohmann::json();
+}
+
 std::string map_anthropic_model_to_nim(const std::string& anthropic_model) {
-	static bool env_loaded = false;
-	static nlohmann::json env_override;
-	if (!env_loaded) {
+	if (!g_model_map_env_loaded) {
 		const char* env_map = std::getenv("NIM_MODEL_MAP");
 		if (env_map && std::strlen(env_map) > 0) {
 			try {
-				env_override = nlohmann::json::parse(env_map);
+				g_model_map_env_override = nlohmann::json::parse(env_map);
 				LOG_INFO("ModelMap", "Loaded model map from NIM_MODEL_MAP env var");
 			}
 			catch (...) {
 				LOG_WARN("ModelMap", "NIM_MODEL_MAP is not valid JSON, ignoring");
 			}
 		}
-		env_loaded = true;
+		g_model_map_env_loaded = true;
 	}
 
-	if (env_override.is_object()) {
-		auto it = env_override.find(anthropic_model);
-		if (it != env_override.end() && it->is_string()) {
+	if (g_model_map_env_override.is_object()) {
+		auto it = g_model_map_env_override.find(anthropic_model);
+		if (it != g_model_map_env_override.end() && it->is_string()) {
 			return it->get<std::string>();
 		}
 	}
@@ -135,8 +146,9 @@ std::string map_anthropic_model_to_nim(const std::string& anthropic_model) {
 	return anthropic_model;
 }
 
-int get_model_context_window(const std::string& model_id) {
-	static const std::unordered_map<std::string, int> context_windows = {
+// Model context windows (tokens). File-scope so it is pure data (no
+// runtime initialization, and gcov does not attribute init lines).
+static const std::unordered_map<std::string, int> context_windows = {
 		// Meta Llama
 		{"meta/llama-3.1-8b-instruct",              131072},
 		{"meta/llama-3.1-70b-instruct",             131072},
@@ -229,7 +241,9 @@ int get_model_context_window(const std::string& model_id) {
 		{"aisingapore/sea-lion-7b-instruct",        4096},
 		{"databricks/dbrx-instruct",                32768},
 		{"zyphra/zamba2-7b-instruct",               32768},
-	};
+};
+
+int get_model_context_window(const std::string& model_id) {
 	auto it = context_windows.find(model_id);
 	if (it != context_windows.end()) return it->second;
 	return 32768;
@@ -338,4 +352,15 @@ std::vector<std::string> load_provider_keys(const std::string& type, const std::
 		keys.push_back(dummy_val);
 	}
 	return keys;
+}
+
+// ============================================================================
+// Cryptographically Secure-ish Randomness
+// ============================================================================
+
+std::string gen_random_id(const std::string& prefix, int range) {
+	static thread_local std::random_device rd;
+	static thread_local std::mt19937 gen(rd());
+	std::uniform_int_distribution<> dis(0, range - 1);
+	return prefix + std::to_string(dis(gen));
 }

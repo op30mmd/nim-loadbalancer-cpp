@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:            # runs on every commit push
+  workflow_dispatch:  # allows manual triggering from the Actions tab
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Linux: default GCC toolchain, OpenSSL-backed curl, coverage gate included
+  # ---------------------------------------------------------------------------
+  linux:
+    name: Build & Test (ubuntu-24.04)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev gcovr
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DNIM_ENABLE_COVERAGE=ON
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Run tests
+        working-directory: build
+        run: ctest --output-on-failure
+
+      - name: Coverage gate (>= 90% line coverage)
+        working-directory: build
+        # Only the project's own modules count: tests/, thirdparty/ and
+        # vendored include/ (httplib, nlohmann) are excluded.
+        run: gcovr -r .. --fail-under-line 90 --filter '../(utils|anthropic_handler|proxy_handlers|proxy_config|key_manager|logger|provider_manager|stats_collector)\.'
+
+  # ---------------------------------------------------------------------------
+  # Windows: MSVC (default Visual Studio generator), Schannel-backed curl
+  # ---------------------------------------------------------------------------
+  windows:
+    name: Build & Test (windows-2025, MSVC)
+    runs-on: windows-2025
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Configure (MSVC)
+        run: cmake -B build -A x64 -DNIM_BUILD_TESTS=ON
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Run tests
+        run: ctest --test-dir build -C Release --output-on-failure
